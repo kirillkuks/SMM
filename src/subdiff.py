@@ -28,7 +28,11 @@ class SubdiffSolver:
         self._cur_vec_b: IntervalVector = None
         self._tau = 1.0
 
-    def solve(self, mat_A: IntervalMatrix, vec_b: IntervalVector) -> IntervalVector:
+    def solve(self,
+              mat_A: IntervalMatrix,
+              vec_b: IntervalVector,
+              err: float = 1e-7,
+              max_iter: int = 1000) -> IntervalVector:
         assert mat_A.is_square()
         assert mat_A.lines() == vec_b.get_size()
 
@@ -36,10 +40,7 @@ class SubdiffSolver:
         self._cur_mat_A, self._cur_vec_b = mat_A, vec_b
         sti_x_k = self.first_estimation()
 
-        # print(sti_x_k)
-        self._cur_mat_A.print()
-
-        for _ in range(10):
+        for _ in range(max_iter):
             # print('########## NEXT ITERATION ##########')
 
             s_interval = IntervalVector.create([Interval(0, 0) for _ in range(system_size)])
@@ -52,8 +53,6 @@ class SubdiffSolver:
                 for j in range(system_size):
                     g0, g1 = self._cur_mat_A[i][j].boundaries()
                     h0, h1 = h[j].boundaries()
-
-                    # print(f'log: [{i}][{j}] | g0 = {g0}, g1 = {g1}, h0 = {h0}, h1 = {h1}')
 
                     t = Interval(g0, g1).mul(Interval(h0, h1))
                     s_i = s_i.interval_add(t)
@@ -71,7 +70,6 @@ class SubdiffSolver:
                         m = 2 if h0 <= h1 else 4
                     
                     multy_type = 4 * k + m
-                    # print(f'[{i}][{j}] | multy = {multy_type}')
 
                     if multy_type == 1:
                         D[i][j] = g0
@@ -139,20 +137,13 @@ class SubdiffSolver:
             s = self._point_vec_sub(sti(s_interval), sti(self._cur_vec_b))
             xx = linalg_solve(D.get_data(), s).tolist()
 
-            # print('-------------------------')
-            # print(D.get_data())
-            # print('----------')
-            # print(f's = {s}')
-            # print('----------')
-            # print(f'xx = {xx}')
-            # print('----------')
-            # print(f'sti_x_k = {sti_x_k}')
-
             sti_x_k = [x_k_i - self._tau * xx_i for x_k_i, xx_i in zip(sti_x_k, xx)]
 
-            # print('----------')
-            # print(f'sti_x_k = {sti_x_k}')
-            # print('-------------------------')
+            r = sum([max(abs(s[i]), abs(s[i + system_size])) for i in range(system_size)])
+            q = sum([abs(sti_x_k_i) for sti_x_k_i in sti_x_k])
+
+            if r / q < err:
+                break
 
         return inv_sti(sti_x_k)
 
@@ -173,9 +164,6 @@ class SubdiffSolver:
         mat_2n_2n = build_matrix_2n_2n(self._cur_mat_A.get_mid_matrix())
         sti_b = sti(self._cur_vec_b)
 
-        # print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-        # print(sti_b)
-        # print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
         x = linalg_solve(mat_2n_2n.get_data(), sti_b, check_finite=False)
         return x.tolist()
     

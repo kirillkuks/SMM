@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List
+from typing import List, Tuple
 
 from interval import Interval
 
@@ -54,13 +54,24 @@ class IntervalVector:
         assert 0 <= idx < self.get_size()
         return self._vector_data[idx]
     
+
+    def find_moda(self) -> Tuple[List[Interval], int]:
+        return Interval.find_moda(self._vector_data)
+
+    
     def get_iterator(self) -> IntervalVector.VectorIterator:
         return IntervalVector.VectorIterator(self)
     
-    def print(self) -> None:
-        print('[', end='')
+
+    def to_str(self) -> str:
+        s = '['
         for i, interval in enumerate(self._vector_data):
             if i > 0:
-                print(', ', end='')
-            print(interval.to_str(), end='')
-        print(']')
+                s += ', '
+            s += interval.to_str()
+        s += ']'
+
+        return s
+
+    def print(self) -> None:
+        print(self.to_str())

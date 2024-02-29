@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, TypeVar, Generic
+from typing import List, TypeVar, Generic, Tuple
 T = TypeVar('T')
 
 from interval import Interval
@@ -20,6 +20,9 @@ class LineViewer(Generic[T]):
     def __setitem__(self, j: int, val: T) -> None:
         assert 0 <= j < len(self._line_view)
         self._line_view[j] = val
+
+    def copy_data(self) -> List[float]:
+        return self._line_view.copy()
 
 
 class IntervalMatrix:
@@ -139,11 +142,19 @@ class Matrix:
         return np.array(self._matrix_data).dot(np.array(vec)).tolist()
     
     def det(self) -> float:
-        return np.linalg.det(self.matrix)
+        return np.linalg.det(self._matrix_data)
 
     def spectral_radius(self) -> float:
-        ws = np.linalg.eigvals(self.matrix)
+        ws = np.linalg.eigvals(self._matrix_data)
         return max(np.abs(ws[i]) for i in range(ws.size))
+    
+    def eigvals(self) -> List[float]:
+        eig = np.linalg.eigvals(self._matrix_data)
+        return [eig_val for eig_val in eig]
+    
+    def svd(self) -> Tuple[Matrix, List[float], Matrix]:
+        sigma = np.linalg.svd(self._matrix_data, full_matrices=False, compute_uv=False)
+        return [sig_val for sig_val in sigma]
 
     def inverse(self) -> Matrix:
         res = Matrix(self.sz())

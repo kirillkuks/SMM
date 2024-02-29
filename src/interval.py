@@ -6,6 +6,10 @@ class Interval:
     @staticmethod
     def create_trivial(x: float) -> Interval:
         return Interval(x, x)
+    
+    @staticmethod
+    def create_from_mid_rad(mid: float, rad: float) -> Interval:
+        return Interval(mid - rad, mid + rad)
 
     @staticmethod
     def min_max_union(intervals: List[Interval]) -> Interval:
@@ -48,7 +52,7 @@ class Interval:
         return [j for i in [intervals1, intervals2] for j in i]
     
     @staticmethod
-    def find_moda(intervals: List[Interval]) -> Interval:
+    def find_moda(intervals: List[Interval]) -> Tuple[Interval, int]:
         intervals_edges = []
         for interval in intervals:
             intervals_edges.append(interval.left)
@@ -56,7 +60,7 @@ class Interval:
 
         intervals_edges.sort()
 
-        moda = Interval(0, 0)
+        moda = []
         intervals_in_moda = 0
         for i, point in enumerate(intervals_edges):
             if i == len(intervals_edges) - 1:
@@ -66,14 +70,16 @@ class Interval:
             current_interval_in_moda = 0
 
             for interval in intervals:
-                current_interval_in_moda += interval.contains(current_interval.mid())
+                current_interval_in_moda += interval.is_nested(current_interval)
+                #current_interval_in_moda += interval.contains(current_interval.mid())
 
             if current_interval_in_moda > intervals_in_moda:
-                moda = current_interval
+                moda = [current_interval]
                 intervals_in_moda = current_interval_in_moda
+            elif current_interval_in_moda == intervals_in_moda:
+                moda.append(current_interval)
 
-        #print(f'moda = {moda.to_str()}, intervals = {intervals_in_moda}')
-        return intervals_in_moda
+        return moda, intervals_in_moda
 
     def __init__(self, x: float, y: float, force_right: bool = False) -> None:
         self.left =  min(x, y) if force_right else x
@@ -105,6 +111,10 @@ class Interval:
     
     def contains(self, val: float) -> bool:
         return self.left <= val <= self.right
+    
+    # other is nested in self
+    def is_nested(self, other: Interval) -> bool:
+        return other.left >= self.left and other.right <= self.right
     
     def interval_add(self, other: Interval) -> Interval:
         return Interval(self.left + other.left, self.right + other.right)
