@@ -75,3 +75,13 @@ class IntervalVector:
 
     def print(self) -> None:
         print(self.to_str())
+
+    def to_latex(self, print_required: bool = True) -> str:
+        latex_str = '\\begin{pmatrix}\n'
+        for elem in self.get_iterator():
+            latex_str += f'{elem.to_str()} \\\\ \n'
+        latex_str += '\end{pmatrix}'
+
+        if print_required:
+            print(latex_str)
+        return latex_str

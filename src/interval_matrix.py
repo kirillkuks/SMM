@@ -97,6 +97,21 @@ class IntervalMatrix:
                 print(interval.to_str(), end='')
             print(']')
 
+    def to_latex(self, print_required: bool = True) -> str:
+        latex_str = '\\begin{pmatrix}\n'
+        for line in self._matrix_data:
+            for i, elem in enumerate(line):
+                if i > 0:
+                    latex_str += ' & '
+                latex_str += f'{elem.to_str()}'
+            latex_str += ' \\\\ \n'
+        latex_str += '\\end{pmatrix}'
+
+        if print_required:
+            print(latex_str)
+        return latex_str
+
+
 
 class Matrix:
     @staticmethod
@@ -152,9 +167,15 @@ class Matrix:
         eig = np.linalg.eigvals(self._matrix_data)
         return [eig_val for eig_val in eig]
     
-    def svd(self) -> Tuple[Matrix, List[float], Matrix]:
+    def svd(self, digits_round: int = 5) -> Tuple[Matrix, List[float], Matrix]:
         sigma = np.linalg.svd(self._matrix_data, full_matrices=False, compute_uv=False)
-        return [sig_val for sig_val in sigma]
+        return [round(sig_val, digits_round) for sig_val in sigma]
+    
+    def condition_num(self) -> float:
+        svd = self.svd()
+        svd_ma, svd_mi = max(svd), min(svd)
+        
+        return svd_ma / svd_mi if svd_mi > 0.0 else float('inf')
 
     def inverse(self) -> Matrix:
         res = Matrix(self.sz())
@@ -165,3 +186,17 @@ class Matrix:
                 res[[i, j]] = inv[i][j]
 
         return res
+    
+    def to_str(self) -> str:
+        s = ''
+        for j, line in enumerate(self._matrix_data):
+            s += '['
+            for i, val in enumerate(line):
+                if i > 0:
+                    s += ', '
+                s += f'{round(val, 7)}'
+            s += f'],\t#{j}\n'
+        return s
+
+    def print(self) -> None:
+        print(self.to_str())

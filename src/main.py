@@ -1,9 +1,11 @@
+from typing import List
 from intervals import Interval, IntervalVector, IntervalMatrix, Matrix
 from subdiff import SubdiffSolver
 
-from example_matrix import k_example_matrix, k_example_matrix_1, k_example_matrix_2, k_example_matrix_3
 from square_matrix_solver import SquareMatrixSolver
 from randomizer import Randomizer
+
+import example_matrix as em
 
 
 def test_subdiff1():
@@ -100,25 +102,69 @@ def matrix_analys():
         [0.0, 0.0, 0.0, 0.0, 0.0],
         [0.0, 4.0, 0.0, 0.0, 0.0]
     ])
-    mat = Matrix.create(k_example_matrix_1)
-    print(mat.svd())
+    mat = Matrix.create(em.k_example_matrix_1)
+    print(f'cond = {mat.condition_num()} | svd = {mat.svd()}')
 
-    mat = Matrix.create(k_example_matrix_2)
-    print(mat.svd())
+    mat = Matrix.create(em.k_example_matrix_2)
+    print(f'cond = {mat.condition_num()} | svd = {mat.svd()}')
     
-    mat = Matrix.create(k_example_matrix_3)
-    print(mat.svd())
+    mat = Matrix.create(em.k_example_matrix_3)
+    print(f'cond = {mat.condition_num()} | svd = {mat.svd()}')
+
+
+class SpetrumDataLoader:
+    def __init__(self) -> None:
+        pass
+
+    def load(self, path: str, c_min: int, c_max: int) -> Matrix:
+        columns_num = c_max - c_min + 1
+        def add_row(arr: List[List[float]], rows_num) -> List[List[float]]:
+            new_rows = [
+                [0.0 for _ in range(columns_num)] for _ in range(rows_num)
+            ]
+            return arr + new_rows
+
+        matrix_lines: List[List[float]] = []
+        for i, c in enumerate(range(c_min, c_max + 1)):
+            filename = f'{path}/C{c}H{2 * c + 2}.txt'
+
+            with open(filename, 'r') as f_ms_data:
+                ms_lines = f_ms_data.readlines()
+
+                row_idxes, vals = [], []
+                for line in ms_lines:
+                    numbers = line.split()
+                    row_idxes.append(int(float(numbers[0])) - 1)
+                    vals.append(float(numbers[1]))
+
+                vals_sum = sum(vals)
+                vals = [v / vals_sum for v in vals]
+
+                for row_idx, val in zip(row_idxes, vals):
+                    sz = len(matrix_lines)
+                    if sz <= row_idx:
+                        matrix_lines = add_row(matrix_lines, row_idx - sz + 1)
+
+                    matrix_lines[row_idx][i] = val
+
+        mat = Matrix.create(matrix_lines)
+        mat.print()
 
 
 def main():
+    # ms_loader = SpetrumDataLoader()
+    # ms_loader.load('spectrum_data', 6, 10)
+    # return
     # matrix_analys()
     # return
 
     # test_subdiff1()
-    example_matrix_slice = k_example_matrix_1
-    mat = Matrix.create(example_matrix_slice)
+    example_matrix_slice = em.k_example_matrix_high_norm_1
 
+    mat = Matrix.create(example_matrix_slice)
+    print(f'cond = {mat.condition_num()} | svd = {mat.svd()}')
     interval_mat = make_interval_matrix(mat, 0.05, 0.15)
+    interval_mat.to_latex()
 
     rnd = Randomizer()
     intervals = []
@@ -127,11 +173,14 @@ def main():
         for j in range(interval_mat.columns()):
             line_sum = line_sum.interval_add(interval_mat[i][j])
 
-        rad_change = min(line_sum.mid(), line_sum.rad()) * rnd.uniform(0.05, 0.1)
+        rad_change = min(line_sum.mid(), line_sum.rad()) * rnd.uniform(0.002, 0.005)
         line_sum = Interval.create_from_mid_rad(line_sum.mid(), line_sum.rad() - rad_change)
         intervals.append(line_sum)
 
     interval_vec = IntervalVector.create(intervals)
+    interval_vec.to_latex()
+    print('----------------------------------')
+    # return
 
     square_solver = SquareMatrixSolver()
     eps = 0.01

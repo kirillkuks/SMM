@@ -79,7 +79,22 @@ class Interval:
             elif current_interval_in_moda == intervals_in_moda:
                 moda.append(current_interval)
 
-        return moda, intervals_in_moda
+        # aggregate intervals
+        aggreate_moda = []
+        current_interval: Interval = None
+        for interval in moda:
+            if current_interval is None:
+                current_interval = interval
+            else:
+                if abs(current_interval.right - interval.left) < 1e-12:
+                    current_interval = Interval(current_interval.left, interval.right)
+                else:
+                    aggreate_moda.append(current_interval)
+                    current_interval = None
+        if current_interval is not None:
+            aggreate_moda.append(current_interval)
+
+        return aggreate_moda, intervals_in_moda
 
     def __init__(self, x: float, y: float, force_right: bool = False) -> None:
         self.left =  min(x, y) if force_right else x
@@ -106,8 +121,8 @@ class Interval:
     def expand(self, eps: float) -> Interval:
         return Interval(self.left - eps, self.right + eps)
 
-    def to_str(self) -> str:
-        return f'[{self.left}, {self.right}]'
+    def to_str(self, digit_round: int = 5) -> str:
+        return f'[{round(self.left, digit_round)}, {round(self.right, digit_round)}]'
     
     def contains(self, val: float) -> bool:
         return self.left <= val <= self.right
@@ -139,3 +154,6 @@ class Interval:
     
     def copy(self) -> Interval:
         return Interval(self.left, self.right)
+    
+    def is_right(self) -> bool:
+        return self.left <= self.right
