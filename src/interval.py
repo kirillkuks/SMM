@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import List, Tuple
+from math import inf
 
 
 class Interval:
@@ -96,6 +97,36 @@ class Interval:
 
         return aggreate_moda, intervals_in_moda
 
+    @staticmethod
+    def outer_quantiles(intervals: List[Interval]) -> Interval:
+        edges = []
+        for interval in intervals:
+            if interval.is_right() or True:
+                edges.extend([interval.left, interval.right])
+
+        if len(edges) == 0:
+            return Interval(-inf, inf)
+
+        edges = sorted(edges)
+        edges_size = len(edges)
+        left_idx, right_idx = int(edges_size * 0.25), int(edges_size * 0.75)
+        # print(edges)
+        # print(f'!!! {edges_size} | {left_idx} | {right_idx}')
+        return Interval(edges[left_idx], edges[right_idx])
+    
+    @staticmethod
+    def outer_median(intervals: List[Interval]) -> Interval:
+        right_intervals = [interval for interval in intervals if interval.is_right() or True]
+        edges_size = len(right_intervals)
+        if edges_size == 0:
+            return Interval(-inf, inf)
+
+        left_edges = sorted([interval.left for interval in right_intervals])
+        right_edges = sorted([interval.right for interval in right_intervals])
+
+        return Interval(left_edges[int(edges_size * 0.5)], right_edges[int(edges_size * 0.5)])
+
+
     def __init__(self, x: float, y: float, force_right: bool = False) -> None:
         self.left =  min(x, y) if force_right else x
         self.right = max(x, y) if force_right else y
@@ -108,6 +139,15 @@ class Interval:
     
     def mid(self) -> float:
          return (self.left + self.right) * 0.5
+    
+    def abs(self) -> float:
+        return max(abs(self.left), abs(self.right))
+    
+    def magnitude(self) -> float:
+        return self.abs()
+    
+    def mignitude(self) -> float:
+        return 0.0 if self.pro().contains(0.0) else min(abs(self.left), abs(self.right))
     
     def pro(self) -> Interval:
         return Interval(self.left, self.right, True)
@@ -157,3 +197,18 @@ class Interval:
     
     def is_right(self) -> bool:
         return self.left <= self.right
+    
+
+class Twin:
+    def __init__(self, inner: Interval, outer: Interval) -> None:
+        # assert outer.contains(inner.left) and outer.contains(inner.right)
+        # assert outer.is_nested(inner)
+
+        self.inner = inner.copy()
+        self.outer = outer.copy()
+
+    def to_str(self, digit_round: int = 5) -> str:
+        return f'[{self.inner.to_str(digit_round)}, {self.outer.to_str(digit_round)}]'
+    
+    def add(self, val: float) -> Twin:
+        return Twin(self.inner.add(val), self.outer.add(val))

@@ -1,5 +1,8 @@
 src/__pycache__/
 src/samples/
+
 doc/
 3rdParty/
+
 *.pdf
+*.pkl

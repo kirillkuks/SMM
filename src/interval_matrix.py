@@ -21,11 +21,29 @@ class LineViewer(Generic[T]):
         assert 0 <= j < len(self._line_view)
         self._line_view[j] = val
 
-    def copy_data(self) -> List[float]:
+    def copy_data(self) -> List[T]:
         return self._line_view.copy()
+    
+
+class MatrixIterator(Generic[T]):
+    def __init__(self, matrix_data: List[List[T]]) -> None:
+        super().__init__()
+        self._matrix_data_view = matrix_data
+        self._cur_idx = 0
+        self._max_idx = len(self._matrix_data_view)
+
+    def __next__(self) -> List[T]:
+        if self._cur_idx >= self._max_idx:
+            raise StopIteration()
+        
+        prev_idx, self._cur_idx = self._cur_idx, self._cur_idx + 1
+        return self._matrix_data_view[prev_idx]
 
 
 class IntervalMatrix:
+    def create_from_vector_line(lines: List[IntervalVector]) -> IntervalMatrix:
+        return IntervalMatrix.create([line.data() for line in lines])
+
     @staticmethod
     def create(lines: List[List[Interval]]) -> IntervalMatrix:
         assert len(lines) > 0
@@ -68,6 +86,9 @@ class IntervalMatrix:
     def __getitem__(self, i: int) -> LineViewer[Interval]:
         assert 0 <= i < self._lines_num
         return LineViewer(self._matrix_data[i])
+    
+    def __iter__(self) -> MatrixIterator[Interval]:
+        return MatrixIterator(self._matrix_data)
 
     def get_mid_matrix(self) -> Matrix:
         mid_matrix_data = [
@@ -143,6 +164,9 @@ class Matrix:
         assert 0 <= i < self._lines_num
         return LineViewer(self._matrix_data[i])
     
+    def __iter__(self) -> MatrixIterator[float]:
+        return MatrixIterator(self._matrix_data)
+    
     def lines(self) -> int:
         return self._lines_num
     
@@ -151,6 +175,7 @@ class Matrix:
     
     def get_data(self) -> npt.ArrayLike:
         return np.array(self._matrix_data)
+    
     
     def mul_vector(self, vec: List[float]) -> List[float]:
         assert self.columns() == len(vec)
@@ -176,6 +201,10 @@ class Matrix:
         svd_ma, svd_mi = max(svd), min(svd)
         
         return svd_ma / svd_mi if svd_mi > 0.0 else float('inf')
+    
+    def is_singular(self) -> bool:
+        return not (self._lines_num == self._columns_num and \
+                np.linalg.matrix_rank(np.array(self._matrix_data)) == self._columns_num)
 
     def inverse(self) -> Matrix:
         res = Matrix(self.sz())

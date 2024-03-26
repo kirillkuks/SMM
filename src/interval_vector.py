@@ -1,7 +1,15 @@
 from __future__ import annotations
-from typing import List, Tuple
+from typing import List, Tuple, Callable, TypeVar
+T = TypeVar('T')
+from enum import IntEnum
 
-from interval import Interval
+from interval import Interval, Twin
+
+
+class OuterMethod(IntEnum):
+    kQuantile = 1,
+    kMedian = 2,
+    kCount = 3
 
 
 class IntervalVector:
@@ -47,6 +55,9 @@ class IntervalVector:
     def __setitem__(self, idx: int, val: Interval) -> None:
         self._vector_data[idx] = Interval(val.left, val.right)
 
+    def __iter__(self) -> IntervalVector.VectorIterator:
+        return self.get_iterator()
+
     def get_size(self) -> int:
         return len(self._vector_data)
     
@@ -54,21 +65,69 @@ class IntervalVector:
         assert 0 <= idx < self.get_size()
         return self._vector_data[idx]
     
+    def data(self) -> List[Interval]:
+        return self._vector_data.copy()
+    
+
+    def has_dominant_value(self) -> Tuple[bool, int]:
+        for idx, ival in enumerate(self):
+            sub_line = [iv.magnitude() for i, iv in enumerate(self) if i != idx]
+
+            if ival.mignitude() > sum(sub_line):
+                return True, idx
+            
+        return False, -1
+    
 
     def find_moda(self) -> Tuple[List[Interval], int]:
         return Interval.find_moda(self._vector_data)
+    
+    def outer_quantiles(self) -> Interval:
+        return Interval.outer_quantiles(self._vector_data)
+    
+    def outer_median(self) -> Interval:
+        return Interval.outer_median(self._vector_data)
+    
+    def twin_estimation(self, outer_est_type: OuterMethod) -> Twin:
+        outer = Interval(0.0, 0.0)
+        if outer_est_type == OuterMethod.kQuantile:
+            outer = self.outer_quantiles()
+        elif outer_est_type == OuterMethod.kMedian:
+            outer = self.outer_median()
+        else:
+            assert False
 
+        inner, _ = self.find_moda()
+        return Twin(Interval(inner[0].left, inner[-1].right), outer)
     
     def get_iterator(self) -> IntervalVector.VectorIterator:
         return IntervalVector.VectorIterator(self)
     
+    def sort_copy(self, lamda_func: Callable[[Interval], float]) -> IntervalVector:
+        return IntervalVector.create(sorted(self._vector_data, key=lamda_func))
+    
+    def extract_extremum(self, target: Callable[[Interval], T]) -> Interval:
+        assert self.get_size() > 0
 
-    def to_str(self) -> str:
+        max_target_val: T = target(self[0])
+        target_interval = self[0]
+
+        for interval in self:
+            target_val = target(interval)
+
+            if target_val > max_target_val:
+                max_target_val, target_interval = target_val, interval
+
+        return target_interval
+
+
+
+    def to_str(self, digit_round: int = 5) -> str:
         s = '['
         for i, interval in enumerate(self._vector_data):
             if i > 0:
                 s += ', '
-            s += interval.to_str()
+            s += interval.to_str(digit_round)
         s += ']'
 
         return s

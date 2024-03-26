@@ -95,6 +95,21 @@ import numpy as np
 # нормировка по столбцам -> нормировка по столбцам
 
 
+#################################################
+#
+# Внешние оценки - медиана К..., Тьюки 1/4 - 50% | 3/4 + 50% 
+# Книжка про изотопную подпись - дофомин и что-то ещё 
+#
+#################################################
+#
+# Выбирать строки случайно
+# Выбирать с диагональным преобладанием
+# Графики рисовать
+# Добавить сравнение результатов для разного количества решённых квадратных систем
+#
+#################################################
+
+
 def matrix_analys():
     mat = Matrix.create([
         [1.0, 0.0, 0.0, 0.0, 2.0],
@@ -116,8 +131,17 @@ class SpetrumDataLoader:
     def __init__(self) -> None:
         pass
 
-    def load(self, path: str, c_min: int, c_max: int) -> Matrix:
-        columns_num = c_max - c_min + 1
+    def load_alkanes(self, path: str, c_min: int, c_max: int) -> Matrix:
+        filenames = [f'C{c}H{2 * c + 2}.txt' for c in range(c_min, c_max + 1)]
+        return self.load(path, filenames)
+    
+    def load_isotopic_signature(self, path) -> Matrix:
+        filenames = ['C8H11NO', 'C8H11NO2', 'C9H11NO2', 'C9H11NO3', 'C11H17NO3']
+        filenames = [f'{filename}.txt' for filename in filenames]
+        return self.load(path, filenames)
+
+    def load(self, dir: str, filenames: List[str]) -> Matrix:
+        columns_num = len(filenames)
         def add_row(arr: List[List[float]], rows_num) -> List[List[float]]:
             new_rows = [
                 [0.0 for _ in range(columns_num)] for _ in range(rows_num)
@@ -125,9 +149,8 @@ class SpetrumDataLoader:
             return arr + new_rows
 
         matrix_lines: List[List[float]] = []
-        for i, c in enumerate(range(c_min, c_max + 1)):
-            filename = f'{path}/C{c}H{2 * c + 2}.txt'
-
+        for i, filename in enumerate(filenames):
+            filename = f'{dir}/{filename}'
             with open(filename, 'r') as f_ms_data:
                 ms_lines = f_ms_data.readlines()
 
@@ -153,13 +176,13 @@ class SpetrumDataLoader:
 
 def main():
     # ms_loader = SpetrumDataLoader()
-    # ms_loader.load('spectrum_data', 6, 10)
+    # ms_loader.load_isotopic_signature('spectrum_data/new')
     # return
     # matrix_analys()
     # return
 
     # test_subdiff1()
-    example_matrix_slice = em.k_example_matrix_high_norm_1
+    example_matrix_slice = em.k_example_matrix_isotopic_sig_norm
 
     mat = Matrix.create(example_matrix_slice)
     print(f'cond = {mat.condition_num()} | svd = {mat.svd()}')
@@ -174,7 +197,7 @@ def main():
             line_sum = line_sum.interval_add(interval_mat[i][j])
 
         rad_change = min(line_sum.mid(), line_sum.rad()) * rnd.uniform(0.002, 0.005)
-        line_sum = Interval.create_from_mid_rad(line_sum.mid(), line_sum.rad() - rad_change)
+        line_sum = Interval.create_from_mid_rad(line_sum.mid(), line_sum.rad() + rad_change)
         intervals.append(line_sum)
 
     interval_vec = IntervalVector.create(intervals)
@@ -185,7 +208,11 @@ def main():
     square_solver = SquareMatrixSolver()
     eps = 0.01
     max_iter = 10
-    square_solver.solve(interval_mat, interval_vec, eps, max_iter)
+    # square_solver.analaze_cached()
+    # square_solver.solve_probabilistic(interval_mat, interval_vec, eps, max_iter)
+    # square_solver.solve_diag_dominant(interval_mat, interval_vec, eps, max_iter)
+    square_solver.solve_diag_dominant_random(interval_mat, interval_vec, eps, max_iter)
+    # square_solver.solve(interval_mat, interval_vec, eps, max_iter)
 
     return
     # intervals = [Interval(1, 2), Interval(2, 3), Interval(3, 4)]
