@@ -2,10 +2,13 @@ from typing import List
 from intervals import Interval, IntervalVector, IntervalMatrix, Matrix
 from subdiff import SubdiffSolver
 
-from square_matrix_solver import SquareMatrixSolver
+from square_matrix_solver import SquareMatrixSolver, Plotter
 from randomizer import Randomizer
 
+from data_loader import SpetrumDataLoader, MouseBrainNeuroLoader, Filter, Neurotransmitters, MassSpectrumData
+
 import example_matrix as em
+from os import listdir
 
 
 def test_subdiff1():
@@ -127,57 +130,91 @@ def matrix_analys():
     print(f'cond = {mat.condition_num()} | svd = {mat.svd()}')
 
 
-class SpetrumDataLoader:
-    def __init__(self) -> None:
-        pass
+def heat_map(mat: Matrix):
+    plotter = Plotter(True)
+    plotter.draw_heat_map(mat, 'MatrixHeatMap', ['C8H11NO', 'C8H11NO2', 'C9H11NO2', 'C9H11NO3', 'C11H17NO3'])
 
-    def load_alkanes(self, path: str, c_min: int, c_max: int) -> Matrix:
-        filenames = [f'C{c}H{2 * c + 2}.txt' for c in range(c_min, c_max + 1)]
-        return self.load(path, filenames)
-    
-    def load_isotopic_signature(self, path) -> Matrix:
-        filenames = ['C8H11NO', 'C8H11NO2', 'C9H11NO2', 'C9H11NO3', 'C11H17NO3']
-        filenames = [f'{filename}.txt' for filename in filenames]
-        return self.load(path, filenames)
 
-    def load(self, dir: str, filenames: List[str]) -> Matrix:
-        columns_num = len(filenames)
-        def add_row(arr: List[List[float]], rows_num) -> List[List[float]]:
-            new_rows = [
-                [0.0 for _ in range(columns_num)] for _ in range(rows_num)
-            ]
-            return arr + new_rows
+neurotransmitters_formula_mapping = {
+    Neurotransmitters.kBh4 : 'C9H15N5O3',
+    Neurotransmitters.kDa : 'C8H11NO2',
+    Neurotransmitters.k5Ht : 'C10H12N20',
+    Neurotransmitters.kNe : 'C8H11NO3',
+    Neurotransmitters.kEp : 'C9H13NO3',
+    Neurotransmitters.kGlu : 'C5H9NO4',
+    Neurotransmitters.kGaba : 'C9H4NO2'
+}
 
-        matrix_lines: List[List[float]] = []
-        for i, filename in enumerate(filenames):
-            filename = f'{dir}/{filename}'
-            with open(filename, 'r') as f_ms_data:
-                ms_lines = f_ms_data.readlines()
 
-                row_idxes, vals = [], []
-                for line in ms_lines:
-                    numbers = line.split()
-                    row_idxes.append(int(float(numbers[0])) - 1)
-                    vals.append(float(numbers[1]))
+def create_matrix_from_spectrum_data(spectrums: List[MassSpectrumData]) -> Matrix:
+    max_mass = int(max([max(spectrum.mass) for spectrum in spectrums]))
+    print(max_mass)
+    spectrum_matrix = Matrix.zeroes(max_mass + 1, len(spectrums))
 
-                vals_sum = sum(vals)
-                vals = [v / vals_sum for v in vals]
+    for i, spectrum in enumerate(spectrums):
+        for mass, intensity in zip(spectrum.mass, spectrum.intensity):
+            spectrum_matrix[int(mass)][i] = intensity
 
-                for row_idx, val in zip(row_idxes, vals):
-                    sz = len(matrix_lines)
-                    if sz <= row_idx:
-                        matrix_lines = add_row(matrix_lines, row_idx - sz + 1)
-
-                    matrix_lines[row_idx][i] = val
-
-        mat = Matrix.create(matrix_lines)
-        mat.print()
+    spectrum_matrix.print()
+    return spectrum_matrix
 
 
 def main():
-    # ms_loader = SpetrumDataLoader()
-    # ms_loader.load_isotopic_signature('spectrum_data/new')
-    # return
+    mouse_neuro_loader = MouseBrainNeuroLoader('spectrum_data/mouse_brain')
+
+    striatum_neuro_mass = mouse_neuro_loader.load_single(
+         MouseBrainNeuroLoader.BrainRegion.kStriatum,
+         Neurotransmitters.filter_all().reject(Neurotransmitters.kBh4))
+    striatum_neuro_vector = IntervalVector([
+        striatum_neuro_mass[Neurotransmitters.kDa],
+        striatum_neuro_mass[Neurotransmitters.k5Ht],
+        striatum_neuro_mass[Neurotransmitters.kNe],
+        striatum_neuro_mass[Neurotransmitters.kEp],
+        striatum_neuro_mass[Neurotransmitters.kGlu],
+        striatum_neuro_mass[Neurotransmitters.kGaba]
+    ])
+    print(striatum_neuro_mass)
+
+
+    ms_loader = SpetrumDataLoader()
+
+    # test example
+    display_plotter = Plotter()
+    mass_spectrum_GABA = ms_loader.load_spectrum('spectrum_data/neuro/C4H9NO2/1075.txt')
+    # display_plotter.plot_mass_spectrum(mass_spectrum_GABA.mass, mass_spectrum_GABA.intensity)
+    mass_spectrum_DA = ms_loader.load_spectrum('spectrum_data/neuro/C8H11NO2/1654.txt')
+    # display_plotter.plot_mass_spectrum(mass_spectrum_DA.mass, mass_spectrum_DA.intensity)
+    mass_spectrum_5HT = ms_loader.load_spectrum('spectrum_data/neuro/C10H12N2O/23841.txt')
+    # display_plotter.plot_mass_spectrum(mass_spectrum_5HT.mass, mass_spectrum_5HT.intensity)
+    mass_spectrum_NE = ms_loader.load_spectrum('spectrum_data/neuro/C8H11NO3/3536.txt')
+    # display_plotter.plot_mass_spectrum(mass_spectrum_NE.mass, mass_spectrum_NE.intensity)
+    mass_spectrum_EP = ms_loader.load_spectrum('spectrum_data/neuro/C9H13NO3/5166.txt')
+    # display_plotter.plot_mass_spectrum(mass_spectrum_EP.mass, mass_spectrum_EP.intensity)
+    mass_spectrum_Glu = ms_loader.load_spectrum('spectrum_data/neuro/C5H9NO4/1097.txt')
+    # display_plotter.plot_mass_spectrum(mass_spectrum_Glu.mass, mass_spectrum_Glu.intensity)
+
+    spectrum_matrix = create_matrix_from_spectrum_data([
+        mass_spectrum_DA,
+        mass_spectrum_5HT,
+        mass_spectrum_NE,
+        mass_spectrum_EP,
+        mass_spectrum_Glu,
+        mass_spectrum_GABA
+    ])
+
+    
+
+    interval_spectrum_matrix = IntervalMatrix.create_from_point(spectrum_matrix)
+    striatum_mixture = interval_spectrum_matrix.mul_vector(striatum_neuro_vector)
+    striatum_mixture.print()
+
+    square_solver = SquareMatrixSolver()
+    eps = 0.1
+    max_iter = 10
+    # square_solver.solve_diag_dominant_random(interval_spectrum_matrix, striatum_mixture, eps, max_iter)
+
+    print(striatum_neuro_mass)
+    return
     # matrix_analys()
     # return
 
@@ -197,21 +234,22 @@ def main():
             line_sum = line_sum.interval_add(interval_mat[i][j])
 
         rad_change = min(line_sum.mid(), line_sum.rad()) * rnd.uniform(0.002, 0.005)
-        line_sum = Interval.create_from_mid_rad(line_sum.mid(), line_sum.rad() + rad_change)
+        line_sum = Interval.create_from_mid_rad(line_sum.mid(), line_sum.rad() - rad_change)
         intervals.append(line_sum)
 
     interval_vec = IntervalVector.create(intervals)
     interval_vec.to_latex()
     print('----------------------------------')
     # return
-
     square_solver = SquareMatrixSolver()
     eps = 0.01
     max_iter = 10
-    # square_solver.analaze_cached()
+    heat_map(interval_mat.get_mid_matrix())
+    return
+    square_solver.analaze_cached()
     # square_solver.solve_probabilistic(interval_mat, interval_vec, eps, max_iter)
     # square_solver.solve_diag_dominant(interval_mat, interval_vec, eps, max_iter)
-    square_solver.solve_diag_dominant_random(interval_mat, interval_vec, eps, max_iter)
+    # square_solver.solve_diag_dominant_random(interval_mat, interval_vec, eps, max_iter)
     # square_solver.solve(interval_mat, interval_vec, eps, max_iter)
 
     return

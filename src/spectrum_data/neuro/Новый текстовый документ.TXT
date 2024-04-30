@@ -1,0 +1,37 @@
+C9H11NO3 (тирозин) (L-Tyrosine)
+	|
+	\/
+C9H11NO4 (леводопа) (L-DOPA)
+	|
+	\/
+C8H11NO2 (дофамин) (Dopamine)
+	|
+	\/
+C8H11NO3 (норадреналин) (Norepinephrine)
+	|
+	\/
+C9H13NO3 (адреналин) (Epinephrine)
+
+--------------------------------------------------------------
+C5H9NO4 (глутаминовая кислота)
+
+
+classes of neurotransmitters
+i
+	dopamine (DA)
+	serotonin (5-HT)	--- C10H12N20
+	norepinephrine (NE)
+	epinephrine (EP)
+	glutamate (GLu)
+	gamma-aminobutyric acid (GABA)	--- C4H9NO2
+	histamine
+	endocannabinoids
+ii
+	neuropeprides
+		enkephalin
+		endorphin
+		substance P
+
+tetrahydrobiopterin (BH4)
+
+

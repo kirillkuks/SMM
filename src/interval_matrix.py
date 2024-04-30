@@ -109,6 +109,18 @@ class IntervalMatrix:
         return self._columns_num
     
 
+    def mul_vector(self, ivec: IntervalVector) -> IntervalVector:
+        assert self.columns() == ivec.get_size()
+
+        result_data = [Interval(0.0, 0.0,) for _ in range(self.lines())]
+
+        for idx, matrix_line in enumerate(self._matrix_data):
+            for mat_value, vec_value in zip(matrix_line, ivec):
+                result_data[idx] = result_data[idx].interval_add(mat_value.mul(vec_value))
+
+        return IntervalVector.create(result_data)
+    
+
     def print(self) -> None:
         for line in self._matrix_data:
             print('[', end='')

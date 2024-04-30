@@ -7,13 +7,15 @@ from itertools import combinations
 from math import log2 as math_log2
 from matplotlib import pyplot as plt
 from matplotlib import figure as pltFig
+from matplotlib.colors import LogNorm
 from functools import reduce
 from numpy.random import default_rng
 from dataclasses import dataclass
 
 import pickle
 import threading
-import numpy as np
+import pandas as pd
+import seaborn as sns
 
 
 def get_chached_data_path(file_name: str) -> str:
@@ -46,8 +48,8 @@ class SolverResult:
         print(f'x_{self.variable_idx}:')
         # print(f'set = {ivec.to_latex(False)}')
         print(f'moda = {self.moda.to_str(digits_precision)} | mu = {self.mu}')
-        print(f'outer quantile twin = {self.twin_quantile.to_str(digits_precision)}')
-        print(f'outer median twin = {self.twin_median.to_str(digits_precision)}')
+        print(f'outer quantile twin = {self.twin_quantile.to_str(digits_precision)} | {self.twin_quantile.outer.wid():.1e}')
+        print(f'outer median twin = {self.twin_median.to_str(digits_precision)} | {self.twin_median.outer.wid():.1e}')
         print('\n\n')
 
     def dump_latex(self, digits_precision: int) -> None:
@@ -67,6 +69,9 @@ class Plotter:
     def __init__(self, save_fig: bool = False) -> None:
         self._save_fig = save_fig
         self._cur_fig: pltFig.Figure = None
+        plt.rc('xtick', labelsize=15)    # fontsize of the tick labels
+        plt.rc('ytick', labelsize=15)    # fontsize of the tick labels
+        plt.rc('legend', fontsize=20)    # legend fontsize
 
     @staticmethod
     def img_save_dst(filename: str) -> str:
@@ -106,11 +111,17 @@ class Plotter:
             plt.plot((i + 1, i + 1), (interval.left, interval.right), color)
 
         sz = solver_result.variable_values.get_size() + 1
-        plt.plot((sz, sz), (solver_result.twin_quantile.outer.left, solver_result.twin_quantile.outer.right), 'g')
+        offset = sz * 0.025
+        delta = offset * 0.25
+        plt.plot((sz + offset, sz + offset), (solver_result.twin_quantile.outer.left, solver_result.twin_quantile.outer.right),
+                 'g', label='outer quantile')
 
         sz += 1
-        plt.plot((sz, sz), (solver_result.twin_median.outer.left, solver_result.twin_median.outer.right), 'y')
+        offset += delta
+        plt.plot((sz + offset, sz + offset), (solver_result.twin_median.outer.left, solver_result.twin_median.outer.right),
+                 'y', label='outer median')
 
+        plt.legend(loc='upper right')
         self._plt_finish(Plotter.img_save_dst(f'Variables'), 200);
     
     def plot_twin_median_sup(self, solver_result: SolverResult) -> None:
@@ -126,7 +137,8 @@ class Plotter:
             ys_inf = [interval.left for interval in ivec]
 
             for i, interval in enumerate(ivec):
-                plt.plot((i + 1, i + 1), (interval.left, interval.right), f'y')
+                color = 'b' if interval.is_right() else 'r'
+                plt.plot((i + 1, i + 1), (interval.left, interval.right), f'{color}')
 
             plt.plot(xs, ys_sup, 'ob', markersize=5)
             plt.plot(xs, ys_inf, 'or', markersize=5)
@@ -139,7 +151,7 @@ class Plotter:
             plt.plot((sz + offset, sz + offset), (outer_est.left, outer_est.right), 'g', marker='o', markersize=5, label='outer')
             
             plt.ylim((y_lim.left, y_lim.right))
-            plt.legend()
+            plt.legend(loc='upper right')
             plt.title(save_name)
             self._plt_finish(Plotter.img_save_dst(save_name))
 
@@ -147,6 +159,29 @@ class Plotter:
         process_twin_result(sorted_ivec, solver_result.twin_quantile, 'TwinQuantile')
         process_twin_result(sorted_ivec, solver_result.twin_median, 'TwinMedian')
 
+    def draw_heat_map(self, matrix: Matrix, title: str, columns_names: List[str]) -> None:
+        assert matrix.columns() == len(columns_names)
+
+        self._plt_start()
+        mat_data = matrix.get_data()
+        for i in range(len(mat_data)):
+            for j in range(len(mat_data[i])):
+                if mat_data[i][j] == 0.0:
+                    mat_data[i][j] = 0.000001
+        df = pd.DataFrame(mat_data, columns=columns_names)
+        sns.heatmap(df, norm=LogNorm())
+
+        self._plt_finish(Plotter.img_save_dst(title))
+
+    def plot_mass_spectrum(self, x_s: List[float], y_s: List[float]):
+        assert len(x_s) == len(y_s)
+        
+        self._plt_start()
+
+        for x_k, y_k in zip(x_s, y_s):
+            plt.plot((x_k, x_k), (0.0, y_k), 'b')
+
+        self._plt_finish('mass spectrum')
 
     def _plt_start(self) -> None:
         if self._save_fig:
@@ -165,7 +200,7 @@ class SquareMatrixSolver:
         self._subdiff_solver = SubdiffSolver()
         self._cur_mat_A: IntervalMatrix = None
         self._cur_vec_b: IntervalMatrix = None
-        self._plotter = Plotter(True)
+        self._plotter = Plotter(False)
 
     def solve(self,
             mat_A: IntervalMatrix,
@@ -213,7 +248,7 @@ class SquareMatrixSolver:
         lines_prob_weights = [line_sum / all_lines_sum for line_sum in lines_sums]
         indexes = [i for i in range(lines_num)]
 
-        systems_num = 350
+        systems_num = 100
         # combination mask -> answer
         square_system_results: Mapping[int, IntervalVector] = {}
         i = 0
@@ -408,8 +443,8 @@ class SquareMatrixSolver:
                 results[var_idx] = solver_result
 
                 modas[var_idx] = moda
-                # solver_result.dump(8)
-                solver_result.dump_latex(8)
+                solver_result.dump(8)
+                # solver_result.dump_latex(8)
         
         tasks = [threading.Thread(target=variable_statistics, args=(i, var_arr)) \
                     for i, var_arr in enumerate(variables_arrays)]
@@ -442,7 +477,7 @@ class SquareMatrixSolver:
         return False, -1
     
     def _load_square_system_results(self) -> Mapping[int, IntervalVector]:
-        with open(get_chached_data_path('isotopic_sig_full_probalistic_350_systems_solvable.pkl'), 'rb') as f:
+        with open(get_chached_data_path('isotopic_sig_full_probalistic_350_systems_insoluble.pkl'), 'rb') as f:
             return pickle.load(f)
         
     def _save_square_system_results(self, dict_result: Mapping[int, IntervalVector]) -> None:

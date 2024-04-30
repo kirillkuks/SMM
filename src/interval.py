@@ -164,6 +164,12 @@ class Interval:
     def to_str(self, digit_round: int = 5) -> str:
         return f'[{round(self.left, digit_round)}, {round(self.right, digit_round)}]'
     
+    def __repr__(self) -> str:
+        return self.to_str() 
+    
+    def __str__(self) -> str:
+        return self.to_str()
+    
     def contains(self, val: float) -> bool:
         return self.left <= val <= self.right
     
