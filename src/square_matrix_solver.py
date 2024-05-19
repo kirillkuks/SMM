@@ -41,6 +41,8 @@ class SolverResult:
     variable_values: IntervalVector
     moda: IntervalVector
     mu: int
+    median_Mef: Interval
+    median_Mep: Interval
     twin_quantile: Twin
     twin_median: Twin
 
@@ -48,6 +50,8 @@ class SolverResult:
         print(f'x_{self.variable_idx}:')
         # print(f'set = {ivec.to_latex(False)}')
         print(f'moda = {self.moda.to_str(digits_precision)} | mu = {self.mu}')
+        print(f'median_Mef = {self.median_Mef.to_str(digits_precision)}')
+        print(f'median_Mep = {self.median_Mep.to_str(digits_precision)}')
         print(f'outer quantile twin = {self.twin_quantile.to_str(digits_precision)} | {self.twin_quantile.outer.wid():.1e}')
         print(f'outer median twin = {self.twin_median.to_str(digits_precision)} | {self.twin_median.outer.wid():.1e}')
         print('\n\n')
@@ -66,16 +70,16 @@ class SolverResult:
 
 
 class Plotter:
-    def __init__(self, save_fig: bool = False) -> None:
+    def __init__(self, save_fig: bool = False, subdir: str ='') -> None:
         self._save_fig = save_fig
         self._cur_fig: pltFig.Figure = None
+        self._subdir = subdir
         plt.rc('xtick', labelsize=15)    # fontsize of the tick labels
         plt.rc('ytick', labelsize=15)    # fontsize of the tick labels
         plt.rc('legend', fontsize=20)    # legend fontsize
 
-    @staticmethod
-    def img_save_dst(filename: str) -> str:
-        return f'img\\{filename}.png'
+    def img_save_dst(self, filename: str) -> str:
+        return f'img\\{filename}.png' if len(self._subdir) == 0 else f'img\\{self._subdir}\\{filename}.png'
 
     def plot_variable_interval_estimations(self, intevals: IntervalVector, var_name: str) -> None:
         self._plt_start()
@@ -88,7 +92,7 @@ class Plotter:
         plt.ylabel('interval estimation')
         plt.xlabel('variable index')
         plt.title(f'{var_name}')
-        self._plt_finish(Plotter.img_save_dst(f'ModaSample{var_name}'), 200)
+        self._plt_finish(self.img_save_dst(f'ModaSample{var_name}'), 200)
 
     def plot_modas(self, modas: List[List[Interval]]) -> None:
         self._plt_start()
@@ -100,7 +104,7 @@ class Plotter:
         plt.ylabel('interval estimation')
         plt.xlabel('variable index')
         plt.title(f'Moda')
-        self._plt_finish(Plotter.img_save_dst(f'ModaSampleModa'), 200)
+        self._plt_finish(self.img_save_dst(f'ModaSampleModa'), 200)
 
     def plot_solver_result(self, solver_result: SolverResult) -> None:
         self._plt_start()
@@ -122,7 +126,7 @@ class Plotter:
                  'y', label='outer median')
 
         plt.legend(loc='upper right')
-        self._plt_finish(Plotter.img_save_dst(f'Variables'), 200);
+        self._plt_finish(self.img_save_dst(f'Variables'), 200);
     
     def plot_twin_median_sup(self, solver_result: SolverResult) -> None:
         self._plt_start()
@@ -153,7 +157,7 @@ class Plotter:
             plt.ylim((y_lim.left, y_lim.right))
             plt.legend(loc='upper right')
             plt.title(save_name)
-            self._plt_finish(Plotter.img_save_dst(save_name))
+            self._plt_finish(self.img_save_dst(save_name))
 
         sorted_ivec = solver_result.variable_values.sort_copy(lambda interval : interval.wid())
         process_twin_result(sorted_ivec, solver_result.twin_quantile, 'TwinQuantile')
@@ -171,9 +175,9 @@ class Plotter:
         df = pd.DataFrame(mat_data, columns=columns_names)
         sns.heatmap(df, norm=LogNorm())
 
-        self._plt_finish(Plotter.img_save_dst(title))
+        self._plt_finish(self.img_save_dst(title))
 
-    def plot_mass_spectrum(self, x_s: List[float], y_s: List[float]):
+    def plot_mass_spectrum(self, x_s: List[float], y_s: List[float], title: str = ''):
         assert len(x_s) == len(y_s)
         
         self._plt_start()
@@ -181,7 +185,9 @@ class Plotter:
         for x_k, y_k in zip(x_s, y_s):
             plt.plot((x_k, x_k), (0.0, y_k), 'b')
 
-        self._plt_finish('mass spectrum')
+        plt.xlabel('m/z')
+        plt.ylabel('Относительная интенсивность')
+        self._plt_finish(self.img_save_dst(title))
 
     def _plt_start(self) -> None:
         if self._save_fig:
@@ -200,7 +206,7 @@ class SquareMatrixSolver:
         self._subdiff_solver = SubdiffSolver()
         self._cur_mat_A: IntervalMatrix = None
         self._cur_vec_b: IntervalMatrix = None
-        self._plotter = Plotter(False)
+        self._plotter = Plotter(True, 'mouse_brain')
 
     def solve(self,
             mat_A: IntervalMatrix,
@@ -429,6 +435,8 @@ class SquareMatrixSolver:
         def variable_statistics(var_idx: int, var_intervals: List[Interval]):
             ivec = IntervalVector.create(var_intervals)
             moda, mu = ivec.find_moda()
+            median_Mef = ivec.median_Mef()
+            median_Mep = ivec.median_Mep()
             twin_quantile = ivec.twin_estimation(OuterMethod.kQuantile)
             twin_median = ivec.twin_estimation(OuterMethod.kMedian)
 
@@ -438,6 +446,8 @@ class SquareMatrixSolver:
                 solver_result.variable_values = ivec
                 solver_result.moda = IntervalVector.create(moda)
                 solver_result.mu = mu
+                solver_result.median_Mef = median_Mef
+                solver_result.median_Mep = median_Mep
                 solver_result.twin_quantile = twin_quantile
                 solver_result.twin_median = twin_median
                 results[var_idx] = solver_result
@@ -454,8 +464,8 @@ class SquareMatrixSolver:
         for variable_stat_task in tasks:
             variable_stat_task.join()
 
-        self._plotter.plot_twin_median_sup(results[0])
-        self._plotter.plot_solver_result(results[0])
+        self._plotter.plot_twin_median_sup(results[2])
+        self._plotter.plot_solver_result(results[2])
 
     def _get_all_combinations(self, n: int, m: int) -> Generator[List[float], None, None]:
         for comb in combinations([i for i in range(n)], m):
@@ -477,7 +487,7 @@ class SquareMatrixSolver:
         return False, -1
     
     def _load_square_system_results(self) -> Mapping[int, IntervalVector]:
-        with open(get_chached_data_path('isotopic_sig_full_probalistic_350_systems_insoluble.pkl'), 'rb') as f:
+        with open(get_chached_data_path('mouse_brain_probalostic_100.pkl'), 'rb') as f:
             return pickle.load(f)
         
     def _save_square_system_results(self, dict_result: Mapping[int, IntervalVector]) -> None:

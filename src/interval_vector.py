@@ -82,6 +82,12 @@ class IntervalVector:
     def find_moda(self) -> Tuple[List[Interval], int]:
         return Interval.find_moda(self._vector_data)
     
+    def median_Mef(self) -> Interval:
+        return Interval.median_Mef(self._vector_data)
+    
+    def median_Mep(self) -> Interval:
+        return Interval.median_Mep(self._vector_data)
+    
     def outer_quantiles(self) -> Interval:
         return Interval.outer_quantiles(self._vector_data)
     

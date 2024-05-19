@@ -3,6 +3,30 @@ from typing import List, Tuple
 from math import inf
 
 
+def _all_trivial_subintervals(intervals_ends: List[float]) -> Interval:
+    intervals_num = len(intervals_ends) - 1
+    for i, interval_left in enumerate(intervals_ends):
+        if i == intervals_num:
+            break
+        
+        yield Interval(interval_left, intervals_ends[i])
+
+
+def _get_trivial_intervals_intensity(intervals: List[Interval], intervals_ends: List[float]) -> Tuple[List[float], int]:
+    trivial_intervas_intensity = []
+    accumulate_intensity = 0
+
+    for trivial_interval in _all_trivial_subintervals(intervals_ends):
+        current_interval_intensity = 0
+        for interval in intervals:
+            current_interval_intensity += 1 if interval.is_nested(trivial_interval) else 0
+            
+        trivial_intervas_intensity.append(current_interval_intensity)
+        accumulate_intensity += current_interval_intensity
+    
+    return trivial_intervas_intensity, accumulate_intensity
+
+
 class Interval:
     @staticmethod
     def create_trivial(x: float) -> Interval:
@@ -52,6 +76,7 @@ class Interval:
     def combine_intervals(intervals1 : List[Interval], intervals2: List[Interval]) -> List[Interval]:
         return [j for i in [intervals1, intervals2] for j in i]
     
+    # TODO: handle KR intervals
     @staticmethod
     def find_moda(intervals: List[Interval]) -> Tuple[Interval, int]:
         intervals_edges = []
@@ -96,6 +121,73 @@ class Interval:
             aggreate_moda.append(current_interval)
 
         return aggreate_moda, intervals_in_moda
+
+    # TODO: handle KR intervals
+    @staticmethod
+    def median_Mef(intervals: List[Interval]) -> Interval:
+        intervals_ends: List[Interval] = []
+        for interval in intervals:
+            # TODO: add unique, for example 1e-10?
+            intervals_ends.extend([interval.left, interval.right])
+
+        intervals_ends.sort()
+
+        primitive_intervals_intensity, accumulative_intensity = _get_trivial_intervals_intensity(intervals, intervals_ends)
+
+        half_accumulative_intensity = accumulative_intensity / 2
+        mid_interval_idx = 0
+        mid_accumulative_intensity = 0
+        while mid_accumulative_intensity < half_accumulative_intensity:
+            primitive_interval_intensity = primitive_intervals_intensity[mid_interval_idx]
+            mid_accumulative_intensity += primitive_interval_intensity
+            mid_interval_idx += 1
+
+
+        mid_interval_idx -= 1
+        # mid_interval_intersity = primitive_intervals_intensity[mid_interval_idx]
+        # left_accumulate_sum = mid_accumulative_intensity - mid_interval_intersity
+        # right_accumulate_sum = accumulative_intensity - left_accumulate_sum - mid_interval_intersity
+        
+        # print(f'l = {sum(primitive_intervals_intensity[:mid_interval_idx])} | l = {left_accumulate_sum}')
+        # print(f'r = {sum(primitive_intervals_intensity[mid_interval_idx+1:])} | r = {right_accumulate_sum}')
+        # print(f'mid idx = {mid_interval_idx} | left_sum = {left_accumulate_sum} | right_sum = {right_accumulate_sum} | acc = {mid_accumulative_intensity} | sum = {accumulative_intensity} \n')
+
+        # TODO: handle this -> interval union
+        # if right_accumulate_sum > left_accumulate_sum:
+        #     print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+        # else:
+        #     print('#############################')
+
+        return Interval(intervals_ends[mid_interval_idx], intervals_ends[mid_interval_idx + 1])
+    
+
+    @staticmethod
+    def median_Mep(intervals: List[Interval]) -> Interval:
+        intervals_ends: List[Interval] = []
+        for interval in intervals:
+            intervals_ends.extend([interval.left, interval.right])
+        
+        intervals_ends.sort()
+
+        trivial_intensity, _ = _get_trivial_intervals_intensity(intervals, intervals_ends)
+        min_sum_dist = inf
+        min_sum_dist_idx = 0
+
+        for i, cur_trivial_interval in enumerate(_all_trivial_subintervals(intervals_ends)):
+            sum_dist_to_other_trivials = 0
+
+            for j, others_trivial_interval in enumerate(_all_trivial_subintervals(intervals_ends)):
+                if i == j:
+                    continue
+
+                sum_dist_to_other_trivials += cur_trivial_interval.dist_to(others_trivial_interval) * trivial_intensity[j]
+            
+            if min_sum_dist > sum_dist_to_other_trivials:
+                min_sum_dist = sum_dist_to_other_trivials
+                min_sum_dist_idx = i
+
+        return Interval(intervals_ends[min_sum_dist_idx], intervals_ends[min_sum_dist_idx + 1])
+
 
     @staticmethod
     def outer_quantiles(intervals: List[Interval]) -> Interval:
@@ -194,6 +286,12 @@ class Interval:
         zsup = max(xsupp * ysupp, xinfm * yinfm) - max(xinfp * ysupm, xsupm * yinfp)
 
         return Interval(zinf, zsup)
+    
+    def dist_to(self, other: Interval) -> float:
+        return max(
+            abs(self.left - other.left),
+            abs(self.right - other.right)
+        )
 
     def boundaries(self) -> Tuple[float, float]:
         return self.left, self.right

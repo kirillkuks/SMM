@@ -3,23 +3,9 @@ from __future__ import annotations
 from typing import List, Mapping
 from os import listdir
 from enum import Enum, IntEnum
-from dataclasses import dataclass
 
 from intervals import Matrix, IntervalMatrix, Interval
-
-
-@dataclass
-class MassSpectrumData:
-    mass: List[float]
-    intensity: List[float]
-
-    def __init__(self, x_s: List[float], y_s: List[float]):
-        self.mass = x_s.copy()
-        self.intensity = y_s.copy()
-
-    def add(self, x: float, y: float) -> None:
-        self.mass.append(x)
-        self.intensity.append(y)
+from utils import MassSpectrumData
 
 
 class SpetrumDataLoader:

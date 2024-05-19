@@ -5,9 +5,10 @@ from subdiff import SubdiffSolver
 from square_matrix_solver import SquareMatrixSolver, Plotter
 from randomizer import Randomizer
 
-from data_loader import SpetrumDataLoader, MouseBrainNeuroLoader, Filter, Neurotransmitters, MassSpectrumData
+from data_loader import SpetrumDataLoader, MouseBrainNeuroLoader, Filter, Neurotransmitters
 
 import example_matrix as em
+import utils as ut
 from os import listdir
 
 
@@ -146,19 +147,6 @@ neurotransmitters_formula_mapping = {
 }
 
 
-def create_matrix_from_spectrum_data(spectrums: List[MassSpectrumData]) -> Matrix:
-    max_mass = int(max([max(spectrum.mass) for spectrum in spectrums]))
-    print(max_mass)
-    spectrum_matrix = Matrix.zeroes(max_mass + 1, len(spectrums))
-
-    for i, spectrum in enumerate(spectrums):
-        for mass, intensity in zip(spectrum.mass, spectrum.intensity):
-            spectrum_matrix[int(mass)][i] = intensity
-
-    spectrum_matrix.print()
-    return spectrum_matrix
-
-
 def main():
     mouse_neuro_loader = MouseBrainNeuroLoader('spectrum_data/mouse_brain')
 
@@ -175,13 +163,54 @@ def main():
     ])
     print(striatum_neuro_mass)
 
-
     ms_loader = SpetrumDataLoader()
 
     # test example
-    display_plotter = Plotter()
+    display_plotter = Plotter(True, 'spectrums')
+    mass_spectrum_DA = ms_loader.load_spectrum('spectrum_data/neuro/C8H11NO2/1654.txt')
+    mass_spectrum_DA_1654 = ms_loader.load_spectrum('spectrum_data/neuro/C8H11NO2/1654.txt')
+    interval_mass_spectrum_DA = ut.merge_mass_spectrums(mass_spectrum_DA, mass_spectrum_DA_1654)
+
     mass_spectrum_GABA = ms_loader.load_spectrum('spectrum_data/neuro/C4H9NO2/1075.txt')
-    # display_plotter.plot_mass_spectrum(mass_spectrum_GABA.mass, mass_spectrum_GABA.intensity)
+    mass_spectrum_GABA_3977 = ms_loader.load_spectrum('spectrum_data/neuro/C4H9NO2/3977.txt')
+    interval_mass_spectrum_GABA = ut.merge_mass_spectrums(mass_spectrum_GABA, mass_spectrum_GABA_3977)
+
+    mass_spectrum_5HT = ms_loader.load_spectrum('spectrum_data/neuro/C10H12N2O/23841.txt')
+    mass_spectrum_5HT_51212 = ms_loader.load_spectrum('spectrum_data/neuro/C10H12N2O/51212.txt')
+    interval_mass_spectrum_5HT = ut.merge_mass_spectrums(mass_spectrum_5HT, mass_spectrum_5HT_51212)
+
+    mass_spectrum_NE = ms_loader.load_spectrum('spectrum_data/neuro/C8H11NO3/3536.txt')
+    mass_spectrum_NE_10660 = ms_loader.load_spectrum('spectrum_data/neuro/C8H11NO3/10660.txt')
+    interval_mass_spectrum_NE = ut.merge_mass_spectrums(mass_spectrum_NE, mass_spectrum_NE_10660)
+
+    mass_spectrum_EP = ms_loader.load_spectrum('spectrum_data/neuro/C9H13NO3/5166.txt')
+    mass_spectrum_EP_6169 = ms_loader.load_spectrum('spectrum_data/neuro/C9H13NO3/6169.txt')
+    interval_mass_spectrum_EP = ut.merge_mass_spectrums(mass_spectrum_EP, mass_spectrum_EP_6169)
+
+    mass_spectrum_Glu = ms_loader.load_spectrum('spectrum_data/neuro/C5H9NO4/1097.txt')
+    mass_spectrum_Glu_2165 = ms_loader.load_spectrum('spectrum_data/neuro/C5H9NO4/2165.txt')
+    interval_mass_spectrum_Glu = ut.merge_mass_spectrums(mass_spectrum_Glu, mass_spectrum_Glu_2165)
+
+    interval_spectrum_matrix = ut.create_interval_matrix_from_spectrum_data([
+        interval_mass_spectrum_DA,
+        interval_mass_spectrum_5HT,
+        interval_mass_spectrum_NE,
+        interval_mass_spectrum_EP,
+        interval_mass_spectrum_Glu,
+        interval_mass_spectrum_GABA
+    ])
+    interval_spectrum_matrix.print()
+
+    striatum_mixture = interval_spectrum_matrix.mul_vector(striatum_neuro_vector, True)
+
+    square_solver = SquareMatrixSolver()
+    eps = 0.1
+    max_iter = 10
+    # square_solver.analaze_cached()
+    # square_solver.solve_probabilistic(interval_spectrum_matrix, striatum_mixture, eps, max_iter)
+    square_solver.solve_diag_dominant_random(interval_spectrum_matrix, striatum_mixture, eps, max_iter)
+    return
+
     mass_spectrum_DA = ms_loader.load_spectrum('spectrum_data/neuro/C8H11NO2/1654.txt')
     # display_plotter.plot_mass_spectrum(mass_spectrum_DA.mass, mass_spectrum_DA.intensity)
     mass_spectrum_5HT = ms_loader.load_spectrum('spectrum_data/neuro/C10H12N2O/23841.txt')
@@ -193,7 +222,7 @@ def main():
     mass_spectrum_Glu = ms_loader.load_spectrum('spectrum_data/neuro/C5H9NO4/1097.txt')
     # display_plotter.plot_mass_spectrum(mass_spectrum_Glu.mass, mass_spectrum_Glu.intensity)
 
-    spectrum_matrix = create_matrix_from_spectrum_data([
+    spectrum_matrix = ut.create_matrix_from_spectrum_data([
         mass_spectrum_DA,
         mass_spectrum_5HT,
         mass_spectrum_NE,
@@ -202,8 +231,6 @@ def main():
         mass_spectrum_GABA
     ])
 
-    
-
     interval_spectrum_matrix = IntervalMatrix.create_from_point(spectrum_matrix)
     striatum_mixture = interval_spectrum_matrix.mul_vector(striatum_neuro_vector)
     striatum_mixture.print()
@@ -211,7 +238,7 @@ def main():
     square_solver = SquareMatrixSolver()
     eps = 0.1
     max_iter = 10
-    # square_solver.solve_diag_dominant_random(interval_spectrum_matrix, striatum_mixture, eps, max_iter)
+    square_solver.solve_probabilistic(interval_spectrum_matrix, striatum_mixture, eps, max_iter)
 
     print(striatum_neuro_mass)
     return

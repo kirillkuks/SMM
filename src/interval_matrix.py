@@ -41,6 +41,7 @@ class MatrixIterator(Generic[T]):
 
 
 class IntervalMatrix:
+    @staticmethod
     def create_from_vector_line(lines: List[IntervalVector]) -> IntervalMatrix:
         return IntervalMatrix.create([line.data() for line in lines])
 
@@ -77,6 +78,14 @@ class IntervalMatrix:
         ]
 
         return IntervalMatrix.create(lines)
+    
+    @staticmethod
+    def zeroes(lines_num: int, columns_num) -> IntervalMatrix:
+        return IntervalMatrix.create([
+                [
+                    Interval.create_trivial(0.0) for _ in range(columns_num)
+                ] for _ in range(lines_num)
+            ]) 
 
     def __init__(self, lines: List[List[Interval]]) -> None:
         self._matrix_data = lines.copy()
@@ -99,6 +108,24 @@ class IntervalMatrix:
 
         return Matrix.create(mid_matrix_data)
     
+    def get_inf_matrix(self) -> Matrix:
+        inf_matrix_data = [
+            [
+                elem.left for elem in line
+            ] for line in self._matrix_data
+        ]
+
+        return Matrix.create(inf_matrix_data)
+    
+    def get_sup_matrix(self) -> Matrix:
+        sup_matrix_data = [
+            [
+                elem.right for elem in line
+            ] for line in self._matrix_data
+        ]
+
+        return Matrix.create(sup_matrix_data)
+    
     def is_square(self) -> bool:
         return self._lines_num == self._columns_num
     
@@ -109,7 +136,7 @@ class IntervalMatrix:
         return self._columns_num
     
 
-    def mul_vector(self, ivec: IntervalVector) -> IntervalVector:
+    def mul_vector(self, ivec: IntervalVector, add_noise: bool = False) -> IntervalVector:
         assert self.columns() == ivec.get_size()
 
         result_data = [Interval(0.0, 0.0,) for _ in range(self.lines())]
@@ -117,6 +144,9 @@ class IntervalMatrix:
         for idx, matrix_line in enumerate(self._matrix_data):
             for mat_value, vec_value in zip(matrix_line, ivec):
                 result_data[idx] = result_data[idx].interval_add(mat_value.mul(vec_value))
+
+                if add_noise:
+                    result_data[idx] = result_data[idx].add(np.random.normal(0.0, result_data[idx].mid() * 0.05))
 
         return IntervalVector.create(result_data)
     
