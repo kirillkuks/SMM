@@ -88,6 +88,9 @@ class IntervalVector:
     def median_Mep(self) -> Interval:
         return Interval.median_Mep(self._vector_data)
     
+    def median_Mef_outer(self) -> Interval:
+        return Interval.median_Mef_outer(self._vector_data)
+    
     def outer_quantiles(self) -> Interval:
         return Interval.outer_quantiles(self._vector_data)
     
@@ -126,6 +129,10 @@ class IntervalVector:
 
         return target_interval
 
+
+    def normalized(self) -> IntervalVector:
+        inv_max_abs = 1.0 / max([interval.magnitude() for interval in self])
+        return IntervalVector.create([interval.scale(inv_max_abs) for interval in self])
 
 
     def to_str(self, digit_round: int = 5) -> str:

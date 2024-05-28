@@ -3,8 +3,10 @@ src/samples/
 
 doc/
 3rdParty/
+VKR/
 
 *.pdf
 *.pkl
 *.docx
 *.pptx
+*.doc

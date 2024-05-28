@@ -1,9 +1,11 @@
 from __future__ import annotations
-from typing import List, Tuple
+from typing import List, Tuple, Generator
 from math import inf
 
+kEps = 1e-10
 
-def _all_trivial_subintervals(intervals_ends: List[float]) -> Interval:
+
+def _all_trivial_subintervals(intervals_ends: List[float]) -> Generator[Interval, None, None]:
     intervals_num = len(intervals_ends) - 1
     for i, interval_left in enumerate(intervals_ends):
         if i == intervals_num:
@@ -25,6 +27,18 @@ def _get_trivial_intervals_intensity(intervals: List[Interval], intervals_ends: 
         accumulate_intensity += current_interval_intensity
     
     return trivial_intervas_intensity, accumulate_intensity
+
+
+def _filter_and_sort(arr: List[float], eps: float) -> List[float]:
+    filtered_and_sorted_arr: List[float] = []
+    for val in sorted(arr):
+        if len(filtered_and_sorted_arr) == 0:
+            filtered_and_sorted_arr.append(val)
+        else:
+            if abs(val - filtered_and_sorted_arr[-1]) > eps:
+                filtered_and_sorted_arr.append(val)
+
+    return filtered_and_sorted_arr
 
 
 class Interval:
@@ -130,7 +144,7 @@ class Interval:
             # TODO: add unique, for example 1e-10?
             intervals_ends.extend([interval.left, interval.right])
 
-        intervals_ends.sort()
+        intervals_ends = _filter_and_sort(intervals_ends, kEps)
 
         primitive_intervals_intensity, accumulative_intensity = _get_trivial_intervals_intensity(intervals, intervals_ends)
 
@@ -142,21 +156,7 @@ class Interval:
             mid_accumulative_intensity += primitive_interval_intensity
             mid_interval_idx += 1
 
-
         mid_interval_idx -= 1
-        # mid_interval_intersity = primitive_intervals_intensity[mid_interval_idx]
-        # left_accumulate_sum = mid_accumulative_intensity - mid_interval_intersity
-        # right_accumulate_sum = accumulative_intensity - left_accumulate_sum - mid_interval_intersity
-        
-        # print(f'l = {sum(primitive_intervals_intensity[:mid_interval_idx])} | l = {left_accumulate_sum}')
-        # print(f'r = {sum(primitive_intervals_intensity[mid_interval_idx+1:])} | r = {right_accumulate_sum}')
-        # print(f'mid idx = {mid_interval_idx} | left_sum = {left_accumulate_sum} | right_sum = {right_accumulate_sum} | acc = {mid_accumulative_intensity} | sum = {accumulative_intensity} \n')
-
-        # TODO: handle this -> interval union
-        # if right_accumulate_sum > left_accumulate_sum:
-        #     print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-        # else:
-        #     print('#############################')
 
         return Interval(intervals_ends[mid_interval_idx], intervals_ends[mid_interval_idx + 1])
     
@@ -167,7 +167,7 @@ class Interval:
         for interval in intervals:
             intervals_ends.extend([interval.left, interval.right])
         
-        intervals_ends.sort()
+        intervals_ends = _filter_and_sort(intervals_ends, kEps)
 
         trivial_intensity, _ = _get_trivial_intervals_intensity(intervals, intervals_ends)
         min_sum_dist = inf
@@ -187,6 +187,48 @@ class Interval:
                 min_sum_dist_idx = i
 
         return Interval(intervals_ends[min_sum_dist_idx], intervals_ends[min_sum_dist_idx + 1])
+    
+
+    @staticmethod
+    def median_Mef_outer(intervals: List[Interval]) -> Interval:
+        intervals_ends: List[float] = []
+        for interval in intervals:
+            intervals_ends.extend([interval.left, interval.right])
+
+        intervals_ends = _filter_and_sort(intervals_ends, kEps)
+
+        trivial_intervals_intensity, accumulate_intensity = _get_trivial_intervals_intensity(intervals, intervals_ends)
+
+        half_inensity = accumulate_intensity / 2
+        mid_interval_idx = 0
+        mid_accumulate_intensity = 0
+        while mid_accumulate_intensity < half_inensity:
+            trivial_intensity = trivial_intervals_intensity[mid_interval_idx]
+            mid_accumulate_intensity += trivial_intensity
+            mid_interval_idx += 1
+
+        mid_interval_idx -= 1
+
+        current_sum_internsity = trivial_intervals_intensity[mid_interval_idx]
+        left_trivials_intensity = mid_accumulate_intensity - trivial_intervals_intensity[mid_interval_idx]
+        right_trivial_intensity = accumulate_intensity - left_trivials_intensity - current_sum_internsity
+
+        median_outer_interval_sum_intensity = accumulate_intensity / 2
+        left_trivial, right_trivial = mid_interval_idx, mid_interval_idx
+        while current_sum_internsity < median_outer_interval_sum_intensity:
+            new_trivial_internsity = 0
+            if left_trivials_intensity > right_trivial_intensity:
+                left_trivial -= 1
+                new_trivial_internsity = trivial_intervals_intensity[left_trivial]
+                left_trivials_intensity -= new_trivial_internsity
+            else:
+                right_trivial += 1
+                new_trivial_internsity = trivial_intervals_intensity[right_trivial]
+                right_trivial_intensity -= new_trivial_internsity
+            
+            current_sum_internsity += new_trivial_internsity
+
+        return Interval(intervals_ends[left_trivial], intervals_ends[right_trivial + 1])
 
 
     @staticmethod

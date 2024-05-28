@@ -131,11 +131,6 @@ def matrix_analys():
     print(f'cond = {mat.condition_num()} | svd = {mat.svd()}')
 
 
-def heat_map(mat: Matrix):
-    plotter = Plotter(True)
-    plotter.draw_heat_map(mat, 'MatrixHeatMap', ['C8H11NO', 'C8H11NO2', 'C9H11NO2', 'C9H11NO3', 'C11H17NO3'])
-
-
 neurotransmitters_formula_mapping = {
     Neurotransmitters.kBh4 : 'C9H15N5O3',
     Neurotransmitters.kDa : 'C8H11NO2',
@@ -147,11 +142,23 @@ neurotransmitters_formula_mapping = {
 }
 
 
+def heat_map(mat: Matrix):
+    plotter = Plotter(True, 'mouse_brain_for_text')
+    plotter.draw_heat_map(mat, 'MatrixHeatMap', [
+        neurotransmitters_formula_mapping[Neurotransmitters.kDa],
+        neurotransmitters_formula_mapping[Neurotransmitters.k5Ht],
+        neurotransmitters_formula_mapping[Neurotransmitters.kNe],
+        neurotransmitters_formula_mapping[Neurotransmitters.kEp],
+        neurotransmitters_formula_mapping[Neurotransmitters.kGlu],
+        neurotransmitters_formula_mapping[Neurotransmitters.kGaba]
+        ])
+
+
 def main():
     mouse_neuro_loader = MouseBrainNeuroLoader('spectrum_data/mouse_brain')
 
     striatum_neuro_mass = mouse_neuro_loader.load_single(
-         MouseBrainNeuroLoader.BrainRegion.kStriatum,
+         MouseBrainNeuroLoader.BrainRegion.kHypothalamus,
          Neurotransmitters.filter_all().reject(Neurotransmitters.kBh4))
     striatum_neuro_vector = IntervalVector([
         striatum_neuro_mass[Neurotransmitters.kDa],
@@ -201,14 +208,41 @@ def main():
     ])
     interval_spectrum_matrix.print()
 
+    # striatum_neuro_mid_vector = [interval.mid() for interval in striatum_neuro_vector]
+    # striatum_point_mexture = interval_spectrum_matrix.mul_point_vector(striatum_neuro_mid_vector)
+    # striatum_point_mexture = [interval.mid() for interval in striatum_point_mexture]
+    # inv_mixture_sum = 100.0 / max(striatum_point_mexture)
+    # display_plotter.plot_mass_spectrum(
+    #     [float(mz) for mz in range(len(striatum_point_mexture))],
+    #     [intensity * inv_mixture_sum  for intensity in striatum_point_mexture],
+    #     'NeuroMixture'
+    # )
+    # return
     striatum_mixture = interval_spectrum_matrix.mul_vector(striatum_neuro_vector, True)
+
+    # rnd = Randomizer()
+    # striatum_mixture = IntervalVector.create([
+    #     Interval.create_from_mid_rad(interval.mid(), interval.rad() * (1.0 - rnd.uniform(0.05, 0.07))) for interval in striatum_mixture 
+    # ])
 
     square_solver = SquareMatrixSolver()
     eps = 0.1
     max_iter = 10
     # square_solver.analaze_cached()
     # square_solver.solve_probabilistic(interval_spectrum_matrix, striatum_mixture, eps, max_iter)
+    heat_map(interval_spectrum_matrix.get_mid_matrix())
+    # print(f'm = {interval_spectrum_matrix.lines()} | n = {interval_spectrum_matrix.columns()}')
+    mid_spectrum_matrix = interval_spectrum_matrix.get_mid_matrix()
+    print(f'cond = {mid_spectrum_matrix.condition_num()} | svd = {mid_spectrum_matrix.svd()}')
+    # striatum_mixture = striatum_mixture.normalized()
+    # display_plotter.plot_mass_spectrum(
+    #     [float(i) for i in range(striatum_mixture.get_size())],
+    #     [interval.abs() * 100 for interval in striatum_mixture],
+    #     'StriatumMouseBrainNormB'
+    # )
+
     square_solver.solve_diag_dominant_random(interval_spectrum_matrix, striatum_mixture, eps, max_iter)
+    # square_solver.solve_probabilistic(interval_spectrum_matrix, striatum_mixture, eps, max_iter)
     return
 
     mass_spectrum_DA = ms_loader.load_spectrum('spectrum_data/neuro/C8H11NO2/1654.txt')

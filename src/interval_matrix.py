@@ -135,6 +135,9 @@ class IntervalMatrix:
     def columns(self) -> int:
         return self._columns_num
     
+    def mul_point_vector(self, vec: List[float]) -> IntervalVector:
+        assert self.columns() == len(vec)
+        return self.mul_vector(IntervalVector.create_from_point(vec), False)
 
     def mul_vector(self, ivec: IntervalVector, add_noise: bool = False) -> IntervalVector:
         assert self.columns() == ivec.get_size()
@@ -146,7 +149,7 @@ class IntervalMatrix:
                 result_data[idx] = result_data[idx].interval_add(mat_value.mul(vec_value))
 
                 if add_noise:
-                    result_data[idx] = result_data[idx].add(np.random.normal(0.0, result_data[idx].mid() * 0.05))
+                    result_data[idx] = result_data[idx].add(np.random.normal(0.0, result_data[idx].mid() * 0.01))
 
         return IntervalVector.create(result_data)
     

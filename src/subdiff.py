@@ -135,6 +135,10 @@ class SubdiffSolver:
                 s_interval[i] = s_i
 
             s = self._point_vec_sub(sti(s_interval), sti(self._cur_vec_b))
+            
+            if D.is_singular():
+                return None
+
             xx = linalg_solve(D.get_data(), s).tolist()
 
             sti_x_k = [x_k_i - self._tau * xx_i for x_k_i, xx_i in zip(sti_x_k, xx)]

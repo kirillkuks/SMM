@@ -56,7 +56,7 @@ def fill_with_zeroes(spectrum: MassSpectrumData, max_mass: int) -> MassSpectrumD
     return MassSpectrumData(filled_mass, filled_intensity)
 
 
-def merge_mass_spectrums(spectrum1: MassSpectrumData, spectrum2: MassSpectrumData) -> MassSpectrumData:
+def merge_mass_spectrums(spectrum1: MassSpectrumData, spectrum2: MassSpectrumData) -> MassSpectrumData[Interval]:
     max_mass = int(max(max(spectrum1.mass), max(spectrum2.mass)))
 
     spectrum1 = fill_with_zeroes(spectrum1, max_mass)
@@ -74,3 +74,4 @@ def merge_mass_spectrums(spectrum1: MassSpectrumData, spectrum2: MassSpectrumDat
         ]
     
     return MassSpectrumData(mass_data, ivec_spectrum_intensity_data)
+

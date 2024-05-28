@@ -26,7 +26,7 @@ class SpetrumDataLoader:
                 if mass != float(int(mass)):
                     continue
 
-                output_data.add(mass, intensity)
+                output_data.add(mass, intensity * 0.01)
 
         return output_data
 
