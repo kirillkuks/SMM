@@ -88,8 +88,11 @@ class IntervalVector:
     def median_Mep(self) -> Interval:
         return Interval.median_Mep(self._vector_data)
     
-    def median_Mef_outer(self) -> Interval:
-        return Interval.median_Mef_outer(self._vector_data)
+    def median_Mef_outer(self, threshold: float = 0.5) -> Interval:
+        return Interval.median_Mef_outer(self._vector_data, threshold)
+    
+    def median_Mep_outer(self, threshold: float = 0.5) -> Interval:
+        return Interval.median_Mep_outer(self._vector_data, threshold)
     
     def outer_quantiles(self) -> Interval:
         return Interval.outer_quantiles(self._vector_data)
@@ -108,6 +111,9 @@ class IntervalVector:
 
         inner, _ = self.find_moda()
         return Twin(Interval(inner[0].left, inner[-1].right), outer)
+    
+    def jaccard_index(self) -> float:
+        return Interval.jaccard_index(self._vector_data)
     
     def get_iterator(self) -> IntervalVector.VectorIterator:
         return IntervalVector.VectorIterator(self)
@@ -128,12 +134,20 @@ class IntervalVector:
                 max_target_val, target_interval = target_val, interval
 
         return target_interval
+    
+    def extract_widest(self) -> Interval:
+        return self.extract_extremum(lambda interval: interval.wid())
 
 
     def normalized(self) -> IntervalVector:
         inv_max_abs = 1.0 / max([interval.magnitude() for interval in self])
-        return IntervalVector.create([interval.scale(inv_max_abs) for interval in self])
+        return self.scale(inv_max_abs)
+    
+    def scale(self, multiplier: float) -> IntervalVector:
+        return IntervalVector.create([interval.scale(multiplier) for interval in self])
 
+    def count(self, couner_func: Callable[[Interval], bool]) -> int:
+        return sum([int(couner_func(interval)) for interval in self])
 
     def to_str(self, digit_round: int = 5) -> str:
         s = '['

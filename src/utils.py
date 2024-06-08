@@ -68,7 +68,7 @@ def merge_mass_spectrums(spectrum1: MassSpectrumData, spectrum2: MassSpectrumDat
 
     mass_data = [float(i) for i in range(max_mass + 1)]
     ivec_spectrum_intensity_data = [
-            add_eps(Interval(intensity1, intensity2, True))
+                Interval(intensity1, intensity2, True)
                 for i, (intensity1, intensity2)
                 in enumerate(zip(spectrum1.intensity, spectrum2.intensity))
         ]

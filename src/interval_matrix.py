@@ -149,7 +149,7 @@ class IntervalMatrix:
                 result_data[idx] = result_data[idx].interval_add(mat_value.mul(vec_value))
 
                 if add_noise:
-                    result_data[idx] = result_data[idx].add(np.random.normal(0.0, result_data[idx].mid() * 0.01))
+                    result_data[idx] = result_data[idx].add(np.random.normal(0.0, result_data[idx].mid() * 0.025))
 
         return IntervalVector.create(result_data)
     

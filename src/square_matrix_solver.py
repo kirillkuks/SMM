@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Generator, List, Tuple, Mapping
+from typing import Generator, List, Tuple, Mapping, Callable
 
 from intervals import Interval, IntervalVector, IntervalMatrix, Matrix, OuterMethod, Twin
 from subdiff import SubdiffSolver
@@ -111,13 +111,65 @@ class SolverResult:
         for i, head_name in enumerate(table_head_names):
             table_line = head_name
             for value in results[i].get_ests_as_array(est_type):
-                table_line += f' & {value.to_str(3)}'
+                table_line += f' & {value.to_str(4)}'
 
             table_line += ' \\\\ \n'
             latex += table_line
 
         latex += '\\hline'
         print(latex)
+
+    @staticmethod
+    def dump_interval_sample_stats(results: List[SolverResult], table_head_names: List[str]) -> None:
+        assert len(results) == len(table_head_names)
+
+        latex = '\\hline \n'
+        
+        for head_name in table_head_names:
+            latex += f' & {head_name}'
+        latex += ' \\\\ \n'
+        latex += '\hline \n'
+        
+        counts = [res.variable_values.count(lambda interval: interval.is_right()) for res in results]
+
+        latex += 'Число правильных интервалов'
+        for count in counts:
+            latex += f' & {count}'
+        latex += ' \\\\ \n'
+
+        latex += 'Доля правильных интервалов'
+        for count, res in zip(counts, results):
+            latex += f' & {round(count / res.variable_values.get_size(), 2)}'
+        latex += ' \\\\ \n'
+
+        latex += 'Индекс Жаккара'
+        for res in results:
+            latex += f' & {round(res.variable_values.jaccard_index(), 3)}'
+        latex += ' \\\\ \n'
+
+        latex += '\\hline'
+
+        print(latex)
+
+    @staticmethod
+    def normilize(results: List[SolverResult]) -> List[SolverResult]:
+        inv_sum_moda = 1.0 / sum([res.moda.extract_widest().mid() for res in results])
+        inv_sum_mef = 1.0 / sum([res.median_Mef.mid() for res in results])
+        inv_sum_mep = 1.0 / sum([res.median_Mep.mid() for res in results])
+        inv_sum_mef_outer = 1.0 / sum([res.median_Mef_outer.mid() for res in results])
+        inv_sum_q = 1.0 / sum([res.twin_quantile.outer.mid() for res in results])
+        inv_sum_kr = 1.0 / sum([res.twin_median.outer.mid() for res in results])
+
+        normalized = results.copy()
+        for i, res in enumerate(results):
+            normalized[i].moda = res.moda.scale(inv_sum_moda)
+            normalized[i].median_Mef = res.median_Mef.scale(inv_sum_moda)
+            normalized[i].median_Mep = res.median_Mep.scale(inv_sum_moda)
+            normalized[i].median_Mef_outer = res.median_Mef_outer.scale(inv_sum_moda)
+            normalized[i].twin_quantile = Twin(normalized[i].moda.extract_widest(), res.twin_quantile.outer.scale(inv_sum_moda))
+            normalized[i].twin_median = Twin(normalized[i].moda.extract_widest(), res.twin_median.outer.scale(inv_sum_moda))
+
+        return normalized
 
 
     variable_idx: int
@@ -132,7 +184,7 @@ class SolverResult:
 
     def get_inner_est(self, est: SolverResult.InnerEstType) -> Interval:
         if est == SolverResult.InnerEstType.kModa:
-            return self.moda[0]
+            return self.moda.extract_widest()
         elif est == SolverResult.InnerEstType.kMef:
             return self.median_Mef
         elif est == SolverResult.InnerEstType.kMep:
@@ -154,7 +206,7 @@ class SolverResult:
 
     def get_ests_as_array(self, est_type: IntervalEstType) -> List[Interval]:
         if est_type == SolverResult.IntervalEstType.kInner:
-            return [self.moda[0], self.median_Mef, self.median_Mep]
+            return [self.moda.extract_widest(), self.median_Mef, self.median_Mep]
         elif est_type == SolverResult.IntervalEstType.kOuter:
             return [self.twin_quantile.outer, self.twin_median.outer.pro(), self.median_Mef_outer]
 
@@ -162,7 +214,10 @@ class SolverResult:
         return []
 
     def dump(self, digits_precision: int) -> None:
+        right_intervals_num = self.variable_values.count(lambda interval: interval.is_right())
         print(f'x_{self.variable_idx}:')
+        print(f'right intervals num = {right_intervals_num}, prop = {round(right_intervals_num / self.variable_values.get_size(), 2)}')
+        print(f'jaccard = {self.variable_values.jaccard_index()}')
         # print(f'set = {ivec.to_latex(False)}')
         print(f'moda = {self.moda.to_str(digits_precision)} | mu = {self.mu}')
         print(f'median_Mef = {self.median_Mef.to_str(digits_precision)}')
@@ -185,6 +240,20 @@ class SolverResult:
         print('\n\n')
 
 
+@dataclass
+class MetricsWids:
+    moda_wids: List[float]
+    mef_wids: List[float]
+    kr_wids: List[float]
+    med_outer_wids: List[float]
+
+    def __init__(self):
+        self.moda_wids = []
+        self.mef_wids = []
+        self.kr_wids = []
+        self.med_outer_wids = []
+
+
 class Plotter:
     def __init__(self, save_fig: bool = False, subdir: str ='') -> None:
         self._save_fig = save_fig
@@ -193,9 +262,73 @@ class Plotter:
         plt.rc('xtick', labelsize=15)    # fontsize of the tick labels
         plt.rc('ytick', labelsize=15)    # fontsize of the tick labels
         plt.rc('legend', fontsize=20)    # legend fontsize
+        plt.rc('figure', figsize=(10, 10))
 
     def img_save_dst(self, filename: str) -> str:
         return f'img\\{filename}.png' if len(self._subdir) == 0 else f'img\\{self._subdir}\\{filename}.png'
+    
+    def plot_metrics_dependency(self, metrics: List[MetricsWids], lables: List[str]) -> None:
+        assert len(metrics) == len(lables)
+
+        def plot_single_metric(metric_values: List[List[float]], save_name: str) -> None:
+            self._plt_start()
+
+            for metric, label_name in zip(metric_values, lables):
+                plt.plot(
+                    [i for i in range(len(metric))],
+                    metric,
+                    label=label_name
+                )
+
+            plt.yscale('log')
+            plt.xlabel('Число решённых квадратных подсистем')
+            plt.ylabel('Ширина оценки')
+            plt.legend(loc='upper right')
+            self._plt_finish(self.img_save_dst(save_name))
+
+        plot_single_metric(
+            [metric_wids.moda_wids for metric_wids in metrics],
+            'ModaWidth'
+        )
+        plot_single_metric(
+            [metric_wids.mef_wids for metric_wids in metrics],
+            'MefWidth'
+        )
+        plot_single_metric(
+            [metric_wids.kr_wids for metric_wids in metrics],
+            'KrWidth'
+        )
+        plot_single_metric(
+            [metric_wids.med_outer_wids for metric_wids in metrics],
+            'MedOuterWids'
+        )
+
+    def plot_inner_and_outer_ests(self, result: SolverResult) -> None:
+        self._plt_start()
+
+        ests = [
+            result.moda.extract_widest(),
+            result.median_Mef,
+            result.median_Mep,
+            result.twin_quantile.outer,
+            result.twin_median.outer,
+            result.median_Mef_outer
+        ]
+        metric_names = [
+            'moda',
+            'med_m',
+            'med_d',
+            'q',
+            'med_kr',
+            'med_outer'
+        ]
+
+        for i, (est, metric_name) in enumerate(zip(ests, metric_names)):
+            plt.plot((i, i), (est.left, est.right), label=metric_name)
+
+        plt.legend(loc='upper right')
+        plt.ylabel('Знвчение интервальной оценки')
+        self._plt_finish(self.img_save_dst('InnerOuterEsts'))
 
     def plot_variable_interval_estimations(self, intevals: IntervalVector, var_name: str) -> None:
         self._plt_start()
@@ -230,7 +363,7 @@ class Plotter:
         label_set = set()
 
         for i, interval in enumerate(sorted_ivec):
-            if interval.abs() > 0.5e5:
+            if interval.abs() > 10:
                 continue
 
             color = 'b' if interval.is_right() else 'r'
@@ -315,7 +448,7 @@ class Plotter:
         self._plt_start()
         
         interval_results = [
-            solver_results.moda[0],
+            solver_results.moda.extract_widest(),
             solver_results.median_Mef,
             solver_results.median_Mep,
             solver_results.twin_median.outer,
@@ -340,7 +473,7 @@ class Plotter:
         self._plt_start()
         
         interval_results = [
-            solver_results.moda[0],
+            solver_results.moda.extract_widest(),
             solver_results.median_Mef,
             solver_results.median_Mep,
         ]
@@ -384,6 +517,7 @@ class Plotter:
 
         plt.xlabel('m/z')
         plt.ylabel('Относительная интенсивность')
+        plt.title('Масс-спектр смеси')
         self._plt_finish(self.img_save_dst(title))
 
     def _plt_start(self) -> None:
@@ -436,7 +570,8 @@ class SquareMatrixSolver:
             mat_A: IntervalMatrix,
             vec_b: IntervalVector,
             err: float = 1e-4,
-            max_iter: int = 1000) -> IntervalVector:
+            max_iter: int = 1000,
+            analyze_each_square: bool = False) -> IntervalVector:
         assert mat_A.lines() == vec_b.get_size()
         self._cur_mat_A, self._cur_vec_b = mat_A, vec_b
 
@@ -469,6 +604,7 @@ class SquareMatrixSolver:
         systems_num = 350
         # combination mask -> answer
         square_system_results: Mapping[int, IntervalVector] = {}
+        metrics_wids = [MetricsWids() for _ in range(square_size)]
         i, j = 0, 42
 
         while i < systems_num:
@@ -492,9 +628,22 @@ class SquareMatrixSolver:
             i += 1
             print(i)
 
+            if analyze_each_square:
+                results = self._get_analysis_result(square_system_results, False)
+                for j in range(square_size):
+                    metrics_wids[j].moda_wids.append(results[j].moda.extract_widest().wid())
+                    metrics_wids[j].mef_wids.append(results[j].median_Mef.wid())
+                    metrics_wids[j].kr_wids.append(results[j].twin_median.outer.wid())
+                    metrics_wids[j].med_outer_wids.append(results[j].median_Mef_outer.wid())
+
         print(f'Finish square systems')
         self._save_square_system_results(square_system_results)
-        self._get_analysis_result(square_system_results)
+
+        if analyze_each_square:
+            labels_names = ['DA', '5-HT', 'NE', 'EP', 'Glu', 'GABA']
+            self._plotter.plot_metrics_dependency(metrics_wids, labels_names)
+        else:
+            results = self._get_analysis_result(square_system_results, True)
 
     def solve_diag_dominant(self,
             mat_A: IntervalMatrix,
@@ -573,7 +722,8 @@ class SquareMatrixSolver:
             mat_A: IntervalMatrix,
             vec_b: IntervalVector,
             err: float = 1e-4,
-            max_iter: int = 1000) -> IntervalVector:
+            max_iter: int = 1000,
+            analyze_each_square: bool = False) -> IntervalVector:
         assert mat_A.lines() == vec_b.get_size()
         self._cur_mat_A, self._cur_vec_b = mat_A, vec_b
 
@@ -601,10 +751,12 @@ class SquareMatrixSolver:
         square_system_results: Mapping[int, IntervalVector] = {}
         i = 0
 
+        metrics_wids = [MetricsWids() for _ in range(square_size)]
+
         while i < systems_num:
             random_idxes = random_idx_subset()
             cur_matrix_line_indexes = [dominant_lines[chunk_idx][line_idx] \
-                                       for chunk_idx, line_idx in enumerate(random_idxes)]
+                                    for chunk_idx, line_idx in enumerate(random_idxes)]
             mask = combination_to_mask(cur_matrix_line_indexes)
 
             if mask in square_system_results:
@@ -618,14 +770,27 @@ class SquareMatrixSolver:
             i += 1
             print(i)
 
+            if analyze_each_square:
+                results = self._get_analysis_result(square_system_results, False)
+                for j in range(square_size):
+                    metrics_wids[j].moda_wids.append(results[j].moda.extract_widest().wid())
+                    metrics_wids[j].mef_wids.append(results[j].median_Mef.wid())
+                    metrics_wids[j].kr_wids.append(results[j].twin_median.outer.wid())
+                    metrics_wids[j].med_outer_wids.append(results[j].median_Mef_outer.wid())
+
         self._save_square_system_results(square_system_results)
-        self._get_analysis_result(square_system_results)
+
+        if analyze_each_square:
+            labels_names = ['DA', '5-HT', 'NE', 'EP', 'Glu', 'GABA']
+            self._plotter.plot_metrics_dependency(metrics_wids, labels_names)
+        else:
+            results = self._get_analysis_result(square_system_results, True)
 
     def analaze_cached(self) -> IntervalVector:
         square_system_result = self._load_square_system_results()
         self._get_analysis_result(square_system_result)
 
-    def _get_analysis_result(self, square_system_results: Mapping[int, IntervalVector]):
+    def _get_analysis_result(self, square_system_results: Mapping[int, IntervalVector], output: bool = True) -> List[SolverResult]:
         systems_results = square_system_results.values()
         
         assert len(systems_results) > 0
@@ -642,8 +807,9 @@ class SquareMatrixSolver:
             for i, val in enumerate(system_result):
                 variables_arrays[i].append(val)
 
-        print(f'Reshape finished: {len(variables_arrays)}')
-        print('Start analysis')
+        if output:
+            print(f'Reshape finished: {len(variables_arrays)}')
+            print('Start analysis')
 
         modas = [[Interval(0.0, 0.0)] for _ in range(square_size)]
         lock = threading.Lock()
@@ -653,8 +819,10 @@ class SquareMatrixSolver:
         def variable_statistics(var_idx: int, var_intervals: List[Interval]):
             ivec = IntervalVector.create(var_intervals)
             moda, mu = ivec.find_moda()
-            median_Mef = ivec.median_Mef()
-            median_Mep = ivec.median_Mep()
+            # median_Mef = ivec.median_Mef()
+            median_Mef = ivec.median_Mef_outer(0.05)
+            # median_Mep = ivec.median_Mep()
+            median_Mep = ivec.median_Mep_outer(0.05)
             median_Mef_outer = ivec.median_Mef_outer()
             twin_quantile = ivec.twin_estimation(OuterMethod.kQuantile)
             twin_median = ivec.twin_estimation(OuterMethod.kMedian)
@@ -673,8 +841,6 @@ class SquareMatrixSolver:
                 results[var_idx] = solver_result
 
                 modas[var_idx] = moda
-                solver_result.dump(8)
-                # solver_result.dump_latex(8)
         
         tasks = [threading.Thread(target=variable_statistics, args=(i, var_arr)) \
                     for i, var_arr in enumerate(variables_arrays)]
@@ -684,21 +850,32 @@ class SquareMatrixSolver:
         for variable_stat_task in tasks:
             variable_stat_task.join()
 
-        neuros = ['DA', '5-HT', 'NE', 'EP', 'Glu', 'GABA']
-        SolverResult.dump_latex_inner(results, neuros)
-        SolverResult.dump_latex_outer(results, neuros)
-        SolverResult.dump_latex_twin(
-            results,
-            neuros,
-            SolverResult.InnerEstType.kMef,
-            SolverResult.OuterEstType.kMedOuter)
+        results = SolverResult.normilize(results)
 
-        res = results[1]
-        self._plotter.plot_twin_median_sup(res)
-        self._plotter.plot_solver_result(res)
-        self._plotter.plot_inner(res)
-        self._plotter.plot_outer(res)
-        self._plotter.plot_inner_outer(res)
+        if output:
+            for res in results:
+                res.dump(8)
+
+        if output:
+            neuros = ['DA', '5-HT', 'NE', 'EP', 'Glu', 'GABA']
+            SolverResult.dump_latex_inner(results, neuros)
+            SolverResult.dump_latex_outer(results, neuros)
+            SolverResult.dump_latex_twin(
+                results,
+                neuros,
+                SolverResult.InnerEstType.kMef,
+                SolverResult.OuterEstType.kMedOuter)
+            SolverResult.dump_interval_sample_stats(results, neuros)
+
+            res = results[0]
+            self._plotter.plot_twin_median_sup(res)
+            self._plotter.plot_solver_result(res)
+            self._plotter.plot_inner(res)
+            self._plotter.plot_outer(res)
+            self._plotter.plot_inner_outer(res)
+            self._plotter.plot_inner_and_outer_ests(res)
+
+        return results
 
     def _get_all_combinations(self, n: int, m: int) -> Generator[List[float], None, None]:
         for comb in combinations([i for i in range(n)], m):

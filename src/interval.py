@@ -55,6 +55,7 @@ class Interval:
         union_interval = intervals[0]
 
         for interval in intervals:
+            interval = interval.pro()
             union_interval = Interval(
                 min(union_interval.left, interval.left),
                 max(union_interval.right, interval.right)
@@ -67,16 +68,17 @@ class Interval:
         intersection_interval = intervals[0]
 
         for interval in intervals:
+            interval = interval.pro()
             intersection_interval = Interval(
                 max(intersection_interval.left, interval.left),
                 min(intersection_interval.right, interval.right)
             )
-
+        
         return intersection_interval
     
     @staticmethod
     def jaccard_index(intervals: List[Interval]) -> float:
-        return Interval.min_max_intersection(intervals).wid() / Interval.min_max_union(intervals).wid() * 0.5 + 0.5
+        return Interval.min_max_intersection(intervals).wid() / Interval.min_max_union(intervals).wid()
 
     @staticmethod
     def scale_intervals(intervals: List[Interval], multiplier: float) -> List[Interval]:
@@ -190,7 +192,9 @@ class Interval:
     
 
     @staticmethod
-    def median_Mef_outer(intervals: List[Interval]) -> Interval:
+    def median_Mef_outer(intervals: List[Interval], threshold: float = 0.5) -> Interval:
+        assert 0.0 < threshold < 1.0
+
         intervals_ends: List[float] = []
         for interval in intervals:
             intervals_ends.extend([interval.left, interval.right])
@@ -213,8 +217,8 @@ class Interval:
         left_trivials_intensity = mid_accumulate_intensity - trivial_intervals_intensity[mid_interval_idx]
         right_trivial_intensity = accumulate_intensity - left_trivials_intensity - current_sum_internsity
 
-        median_outer_interval_sum_intensity = accumulate_intensity / 2
-        left_trivial, right_trivial = mid_interval_idx, mid_interval_idx
+        median_outer_interval_sum_intensity = accumulate_intensity * threshold
+        left_trivial, right_trivial = mid_interval_idx, mid_interval_idx + 1
         while current_sum_internsity < median_outer_interval_sum_intensity:
             new_trivial_internsity = 0
             if left_trivials_intensity > right_trivial_intensity:
@@ -228,7 +232,62 @@ class Interval:
             
             current_sum_internsity += new_trivial_internsity
 
-        return Interval(intervals_ends[left_trivial], intervals_ends[right_trivial + 1])
+        return Interval(intervals_ends[left_trivial], intervals_ends[right_trivial])
+
+    def median_Mep_outer(intervals: List[Interval], threshold: float = 0.5) -> Interval:
+        assert 0.0 < threshold < 1.0
+
+        intervals_ends: List[Interval] = []
+        for interval in intervals:
+            intervals_ends.extend([interval.left, interval.right])
+        
+        intervals_ends = _filter_and_sort(intervals_ends, kEps)
+
+        trivial_intensity, trivial_intensity_sum = _get_trivial_intervals_intensity(intervals, intervals_ends)
+        min_sum_dist = inf
+        min_sum_dist_idx = 0
+
+        for i, cur_trivial_interval in enumerate(_all_trivial_subintervals(intervals_ends)):
+            sum_dist_to_other_trivials = 0
+
+            for j, others_trivial_interval in enumerate(_all_trivial_subintervals(intervals_ends)):
+                if i == j:
+                    continue
+
+                sum_dist_to_other_trivials += cur_trivial_interval.dist_to(others_trivial_interval) * trivial_intensity[j]
+            
+            if min_sum_dist > sum_dist_to_other_trivials:
+                min_sum_dist = sum_dist_to_other_trivials
+                min_sum_dist_idx = i
+
+        def dist_to_other_trivials(left_idx: int, right_idx: int) -> int:
+            sum_dist_to_other = 0
+            cur_interval = Interval(intervals_ends[left_idx], intervals_ends[right_idx])
+
+            for j, other_trivial in enumerate(_all_trivial_subintervals(intervals_ends)):
+                if left_idx <= j < right_idx:
+                    continue
+
+                sum_dist_to_other += cur_interval.dist_to(other_trivial) * trivial_intensity[j]
+
+            return sum_dist_to_other
+
+        left_idx, right_idx = min_sum_dist_idx, min_sum_dist_idx + 1
+        trivial_intensity_threshold = trivial_intensity_sum * threshold
+        trivial_intensity_sum = trivial_intensity[left_idx]
+        
+        while trivial_intensity_sum < trivial_intensity_threshold:
+            left_sum = dist_to_other_trivials(left_idx - 1, right_idx)
+            right_sum = dist_to_other_trivials(left_idx, right_idx + 1)
+
+            if left_sum > right_sum:
+                left_idx -= 1
+                trivial_intensity_sum += trivial_intensity[left_idx]
+            else:
+                right_idx += 1
+                trivial_intensity_sum += trivial_intensity[right_idx]
+
+        return Interval(intervals_ends[left_idx], intervals_ends[right_idx])
 
 
     @staticmethod
@@ -240,10 +299,13 @@ class Interval:
 
         if len(edges) == 0:
             return Interval(-inf, inf)
+        
+        alpha = 0.25
+        assert 0 < alpha < 0.5
 
         edges = sorted(edges)
         edges_size = len(edges)
-        left_idx, right_idx = int(edges_size * 0.25), int(edges_size * 0.75)
+        left_idx, right_idx = int(edges_size * (alpha)), int(edges_size * (1.0 - alpha))
         # print(edges)
         # print(f'!!! {edges_size} | {left_idx} | {right_idx}')
         return Interval(edges[left_idx], edges[right_idx])
